@@ -1,0 +1,76 @@
+# .coderabbit.yaml
+# NEXUS AI-powered Code Review Configuration
+version: 2
+
+language: "en-US"
+
+early_access: false
+
+reviews:
+  profile: "assertive" # Options: chill, assertive, followup
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "main"
+      - "master"
+      - "develop"
+
+  # Exclude non-source files, dependencies, build artifacts, and vendor files
+  path_filters:
+    - "!**/node_modules/**"
+    - "!**/.pnpm-store/**"
+    - "!**/.venv/**"
+    - "!**/target/**"
+    - "!**/dist/**"
+    - "!**/build/**"
+    - "!**/.next/**"
+    - "!**/*.lock"
+    - "!**/*.lockb"
+    - "!**/pnpm-lock.yaml"
+    - "!**/*.min.js"
+    - "!**/*.min.css"
+    - "!**/*.map"
+    - "!**/*.tgz"
+    - "!**/.planning/**"
+    - "!**/.agents/**"
+
+  # Path-specific review instructions tailored for NEXUS architecture
+  path_instructions:
+    - path: "apps/desktop/**"
+      instructions: |
+        - Ensure compliance with Tauri v2 capability security models (avoid broad host permissions).
+        - Verify Next.js is configured for static export (`output: 'export'`) without Node server dependencies.
+        - Check that CodeMirror 6 and xterm.js instances cleanly handle disposal and unmounting to prevent memory leaks.
+        - Verify UI adheres to the dark-first Technical Premium design system (shadcn/ui + Tailwind CSS tokens).
+
+    - path: "services/backend/**"
+      instructions: |
+        - Enforce Python 3.12 async idioms and strict type hinting (FastAPI + Pydantic v2).
+        - Verify that all agent tool executions route through sandbox policy checks and security gates.
+        - Ensure zero plain-text secrets; all credentials must use OS Keyring / Credential Manager.
+        - Validate SQLite WAL mode transactions and sqlite-vec vector query safety.
+        - Check that all subprocess commands (e.g. Git, ripgrep, Docker) use explicit timeouts and non-blocking async execution.
+
+    - path: "docker/**"
+      instructions: |
+        - Ensure containers run as non-root user (uid:gid 1000:1000).
+        - Verify root filesystem is read-only (`--read-only`) with explicit tmpfs mounts.
+        - Validate strict cgroup limits (CPU, memory, process counts).
+
+    - path: "packages/shared-types/**"
+      instructions: |
+        - Ensure types remain strictly synchronized with backend Pydantic DTO definitions.
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  opt_out: false
+  learnings:
+    scope: "local"
