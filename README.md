@@ -6,7 +6,7 @@ NEXUS is an autonomous, **local-first AI Software Engineer** designed to operate
 
 ## 🚀 Key Highlights
 
-* **Local-First & Private:** All AI inference, embeddings, AST parsing, and indexing run locally on your machine with zero cloud telemetry.
+* **Local-First & Private:** All AI inference, embeddings, AST parsing, and indexing execute locally on your machine by default with zero telemetry leakage. Optional cloud LLM adapters (e.g. Anthropic, OpenAI) require explicit user configuration and opt-in.
 * **Full Engineering Lifecycle:** From requirement analysis and planning to test execution, Docker sandboxing, Git commits, and code review.
 * **Modern Desktop & Mobile:** Powered by a lightweight Tauri v2 shell on desktop with an accompanying Android companion app for remote approvals.
 * **Model-Agnostic:** Seamless integration with local Ollama models (Qwen 2.5 Coder, Llama 3.3, DeepSeek) and OpenAI-compatible endpoints.

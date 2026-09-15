@@ -367,12 +367,18 @@ flowchart TD
 
 | Feature | Embedded SQLite (WAL) | PostgreSQL 16 Container | Decision |
 | :--- | :--- | :--- | :--- |
-| **Installation Complexity** | Zero (Built into Python) | Requires Docker container or daemon | **SQLite for MVP** |
+| **Installation Complexity** | Zero (Bundled via Python & precompiled wheels) | Requires Docker container or daemon | **SQLite for MVP** |
 | **Resource Overhead** | <10 MB RAM | 80 MB - 150 MB RAM | SQLite is zero-footprint |
 | **Concurrency** | Single-writer / Multi-reader (WAL) | Full multi-master MVCC | SQLite WAL handles desktop load |
-| **ORM / Migration** | SQLAlchemy 2.0 Async + Alembic | SQLAlchemy 2.0 Async + Alembic | Identical ORM schemas |
+| **ORM / Migration** | SQLAlchemy 2.0 Async + Alembic | SQLAlchemy 2.0 Async + Alembic | Portable ORM schemas |
 
-* **Database Access Layer:** **SQLAlchemy 2.0 (Asyncio)** with **Alembic** migration tooling. Schema models are written cleanly to allow zero-code switching between SQLite and PostgreSQL.
+* **Runtime Contract & Verification:**
+  * Application startup verifies SQLite runtime version (`sqlite3.sqlite_version >= 3.45.0`) and verifies extension loading capabilities.
+  * `sqlite-vec` extension is bundled via pre-compiled platform wheels and loaded at database engine initialization.
+* **Database Access Layer & Migration Boundary:**
+  * **SQLAlchemy 2.0 (Asyncio)** with **Alembic** migration tooling.
+  * Schemas avoid database-specific proprietary types (using standard UUID, BigInteger, JSONB/JSON abstractions) to maintain a clean compatibility boundary.
+  * For the V1 PostgreSQL/`pgvector` transition, an automated schema and data migration adapter (`nexus db migrate-to-postgres`) will handle table copy, index rebuilding, and vector dimensional re-indexing.
 
 ---
 
@@ -383,9 +389,9 @@ flowchart TD
 * **Role:** Vector similarity search for codebase chunks and agent memory.
 * **Why `sqlite-vec` for MVP:**
   * Native C extension running in-process inside SQLite.
-  * Requires no separate server, port, or Docker container.
-  * Ultra-fast SIMD vector operations (AVX-512, Neon) for up to 500,000 code embeddings.
-* **V1 Migration Path:** Seamless transition to PostgreSQL + `pgvector` when multi-user or enterprise indexing is enabled.
+  * Zero separate background daemon or network socket overhead.
+  * Sub-10ms vector KNN queries over 50k code chunk embeddings.
+* **V1 Upgrade Path:** Transparent migration to PostgreSQL `pgvector` extension for distributed team RAG instances.
 
 ---
 
@@ -394,6 +400,10 @@ flowchart TD
 ### Selection: Native Python AsyncIO Task Engine + SQLite Task State (Zero Redis for MVP)
 
 * **Architecture:** In-process priority queue backed by SQLite task state persistence.
+* **Durable State & Crash Recovery Contract:**
+  * Task lifecycle transitions (`PENDING` -> `RUNNING` -> `PAUSED` -> `COMPLETED`/`FAILED`) are atomically persisted with monotonically increasing state revision counters.
+  * **Task Lease Ownership & Heartbeat:** Active worker coroutines maintain a short lease timeout (e.g. 30s heartbeat). If a backend process crashes or is killed, orphan tasks are detected at startup, side-effect compensation checks run, and uncompleted steps are safely transitioned to `RECOVERY_REQUIRED` or resumed.
+  * **Idempotency:** Tool executions that modify files or create Git commits record unique operation tokens in SQLite before execution to guarantee idempotent retries.
 * **Why Redis is Omitted in MVP:**
   * NEXUS is a single-user desktop application; running a separate Redis daemon adds memory overhead, port conflicts, and failure modes.
   * SQLite WAL mode guarantees ACID persistence for background jobs, retries, and crash recovery.
@@ -440,12 +450,18 @@ NEXUS strictly isolates host operations from containerized sandbox operations:
 | Operation Type | Host Execution Boundary | Docker Sandbox Boundary |
 | :--- | :--- | :--- |
 | **File Reading / AST Parsing** | Direct read via Python async I/O | N/A |
-| **File Writing / Code Edits** | Direct atomic write via temp file rename | N/A |
-| **Git Operations** | Host Git CLI / pygit2 | N/A |
-| **Test Execution** | Disabled by default (Only with explicit override)| Primary execution target |
+| **File Writing / Code Edits** | Direct atomic write routed through `HostBridge` policy gate | N/A |
+| **Git Operations** | Host Git CLI / pygit2 (Scoped to project root) | N/A |
+| **Test Execution** | Disabled by default (Only with explicit high-risk override)| Primary execution target |
 | **Build / Compile Commands** | Disabled by default | Primary execution target |
-| **Linter / Formatting** | Direct (Safe AST) | Primary execution target |
-| **Interactive Terminal Shell** | Host PTY (Explicit human session) | Container PTY (Agent session) |
+| **Linter / Formatting** | Direct (Safe AST without arbitrary code execution) | Primary execution target |
+| **Interactive Terminal Shell** | Host PTY (Explicit human session with policy warning) | Container PTY (Agent session) |
+
+* **HostBridge File Modification Policy Controls:**
+  * All file writes and deletions must pass through the `HostBridge` security guard.
+  * **Path Resolution & Jail:** Strict path canonicalization rejecting directory traversal (`../`), symlink escapes, and root escapes outside the active project boundary.
+  * **Protected Targets:** Direct writes to `.git/`, `.nexus/`, system binaries, or environment secrets files (`.env`) are unconditionally rejected.
+  * **Audit & Reversibility:** Every file write creates an in-memory unified diff, generates an append-only audit event, and stages changes atomically via temporary file replacement.
 
 ---
 
@@ -492,22 +508,25 @@ sequenceDiagram
     participant Desktop as Desktop Engine (FastAPI)
     
     Note over Desktop,Mobile: 1. Out-of-Band Pairing via QR Code
-    Desktop->>Desktop: Generate Ephemeral ECDSA Keypair & Display QR
+    Desktop->>Desktop: Generate Ephemeral Pairing Challenge & Display QR
     Mobile->>Desktop: Scan QR (Contains IP, Port, Fingerprint, One-Time Nonce)
-    Mobile->>Desktop: Handshake Request (mTLS / Signed Challenge)
-    Desktop-->>Mobile: Exchange Long-Lived JWT + Device Public Key Registration
+    Mobile->>Desktop: Handshake Request (Signed Challenge + Mobile ECDSA Public Key)
+    Desktop-->>Mobile: Issue 1-Hour Access JWT + Refresh Token + Register Public Key
     
     Note over Desktop,Mobile: 2. Real-Time Secure Session (LAN / Tailscale)
-    Mobile->>Desktop: Connect WebSocket (WSS / Bearer Token)
+    Mobile->>Desktop: Connect WebSocket (WSS / 1-Hour Bearer Token)
     Desktop-->>Mobile: Stream Task State, Approvals & Logs
-    Mobile->>Desktop: Send Approval Response (Signed with Device Private Key)
-    Desktop->>Desktop: Verify Signature & Resume Agent Pipeline
+    Mobile->>Desktop: Submit Signed Approval (Signed with Device Private Key + Replay Nonce)
+    Desktop->>Desktop: Verify Signature, Nonce & Timestamp Window; Resume Pipeline
 ```
 
 * **Network Topologies Supported:**
   1. **Direct Local Network (mDNS / LAN):** Zero cloud dependence.
   2. **Encrypted WireGuard / Tailscale Mesh:** Seamless connectivity across networks without public port forwarding.
-* **Encryption:** End-to-end TLS 1.3 encryption with certificate fingerprint pinning.
+* **Encryption & Replay Protection:**
+  * End-to-end TLS 1.3 encryption with certificate fingerprint pinning.
+  * All approval requests require signed payloads: `HMAC/ECDSA(method + path + body_digest + approval_id + nonce + timestamp)`.
+  * Desktop engine enforces a strict 60-second timestamp freshness window and records consumed nonces in SQLite to prevent replay attacks.
 
 ---
 
@@ -569,7 +588,8 @@ All internal communications follow a standardized, strictly typed JSON Event Env
 ## 29. Authentication Architecture
 
 * **Desktop Application (Tauri Local IPC):** Communication between Tauri frontend and FastAPI backend uses a dynamically generated, high-entropy Bearer Secret Token stored in memory and rotated on process launch.
-* **Mobile Companion:** Cryptographic device binding. Each mobile device generates an ECDSA keypair; the public key is registered via QR pairing. Requests require signed HTTP headers (`X-Nexus-Signature`, `X-Nexus-Timestamp`).
+* **Mobile Companion:** Cryptographic device binding. Each mobile device generates an ECDSA keypair; only the public key is registered via QR pairing. Requests require 1-hour access JWTs and signed headers (`X-Nexus-Signature`, `X-Nexus-Nonce`, `X-Nexus-Timestamp`).
+* **Device Revocation:** Revoking a paired device immediately invalidates all active JWTs and refresh tokens, forcefully terminates existing WebSocket sessions, and blocks reconnection.
 * **GitHub Integration:** Token stored encrypted in the OS Credential Vault; never exposed via API endpoints.
 
 ---
@@ -584,8 +604,9 @@ All internal communications follow a standardized, strictly typed JSON Event Env
 | :--- | :--- | :--- |
 | **GitHub Tokens** | Windows Credential Manager / macOS Keychain / Secret Service | Master OS User Session |
 | **Cloud API Keys (Opt-in)**| Windows Credential Manager | Master OS User Session |
-| **Local JWT Tokens** | In-Memory volatile RAM | Process Lifecycle |
-| **Mobile Pairing Keys** | SQLite Encrypted Table (AES-256-GCM) | Master Key derived from OS Vault |
+| **Local JWT Tokens** | In-Memory volatile RAM (1-Hour Expiry) | Process Lifecycle |
+| **Mobile Pairing Public Keys** | SQLite Registered Devices Table | Public keys only; private keys stay in mobile SecureStore |
+| **Master Cryptographic Keys** | Windows Credential Manager (OS Vault) | Master OS User Session |
 
 * **Zero Plain-Text Rule:** API keys and credentials are never written to disk files, logs, database tables, or `.env` files.
 
@@ -605,8 +626,12 @@ graph TD
     HITL -->|User Approves| AutoAllow
     HITL -->|User Denies| Abort[Abort Step & Alert Agent]
     AutoAllow --> CGroup[Docker Isolated Container Execution]
-    CGroup --> AuditLog[Immutable SQLite Security Audit Trail]
+    CGroup --> AuditLog[Cryptographically Chained SQLite Security Audit Trail]
 ```
+
+* **Tamper-Resistant Audit Trail Controls:**
+  * All agent actions, policy evaluations, tool invocations, and approval decisions write to an append-only SQLite audit table.
+  * Each audit log record contains a cryptographic SHA-256 hash pointer to the previous record (`prev_record_hash`), creating a tamper-evident audit ledger.
 
 ---
 
@@ -718,6 +743,9 @@ nexus/
   1. `Global System Config`: `~/.nexus/config.toml` (Hardware profiles, default models, theme).
   2. `Project-Level Config`: `<project_root>/.nexus.json` (Ignored files, custom test commands, sandbox image).
   3. `Volatile Session Config`: Active model overrides, temporary approvals.
+* **Security Constraints & Sandbox Allowlist:**
+  * Custom sandbox images specified in `.nexus.json` must belong to an approved registry/image allowlist or require explicit high-risk user approval.
+  * Project-level configuration is strictly prohibited from enabling direct host execution, arbitrary host filesystem mounts, or privileged Docker container flags (`--privileged`, `--cap-add=ALL`).
 * **Validation:** All configuration schemas are strictly validated via Pydantic v2.
 
 ---
@@ -859,7 +887,7 @@ Local Storage Distribution:
 ## 53. Developer Environment Setup
 
 * **Prerequisites:**
-  * Windows 10/11 x64, macOS 14+, or Ubuntu 22.04+.
+  * Windows 10/11 x64 (Primary MVP Release Target; macOS 14+ and Ubuntu 22.04+ in V1).
   * Node.js 22 LTS + `pnpm` (`corepack enable`).
   * Python 3.12 + `uv` package manager.
   * Rust stable (`rustup default stable`) for Tauri compilation.
@@ -972,7 +1000,7 @@ graph TD
 ## 60. Master Technology Matrix
 
 | Technology | Category | Version | Layer | MVP / V1 | License | Local / Cloud | Security Impact | Performance Impact |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Tauri** | Desktop Shell | v2.x | Shell | MVP | MIT/Apache | Local | High (IPC Sandbox) | Ultra-low RAM (40MB) |
 | **React / Next.js**| Frontend | 19 / 15 | UI | MVP | MIT | Local | Low | High UI rendering speed |
 | **CodeMirror 6** | Code Editor | v6.x | UI | MVP | MIT | Local | Low | Lightweight DOM |
@@ -995,10 +1023,10 @@ graph TD
 | Risk Event | Likelihood | Impact | Mitigation Strategy | Contingency Plan |
 | :--- | :--- | :--- | :--- | :--- |
 | **Ollama API Breaking Changes** | Moderate | High | Abstract all LLM calls behind standard OpenAI JSON schemas. | Swap to direct `vLLM` or `llama.cpp` server adapter. |
-| **Docker Unavailable on Host** | High | High | Display clear setup wizard with WSL2 installation guide. | Fallback to restricted local sandbox with warning. |
+| **Docker Unavailable on Host** | High | High | Display setup wizard prompting user to install Docker Desktop with WSL2. | **Strict Fail-Closed:** Disable arbitrary build/test execution; prompt user before any host fallback. |
 | **Insufficient VRAM on User PC** | High | Moderate | Auto-detect GPU VRAM on boot; fallback to quantized 7B or CPU. | Offload context embeddings to FastEmbed ONNX. |
 | **sqlite-vec Platform Incompatibility**| Low | Moderate | Use pre-compiled universal binaries for x64/ARM64. | Fallback to in-memory cosine search via NumPy. |
-| **Tree-sitter Parser Drift** | Low | Low | Pin exact grammar repository releases in build. | Standard regex fallback for unparsed grammars. |
+| **Tree-sitter Parser Drift** | Low | Low | Pin exact grammar repository releases in build. | Regex fallback for search/indexing only; **never** authorize security policy gates without valid AST parsing. |
 
 ---
 
@@ -1033,7 +1061,7 @@ graph TD
 ## 63. Security Architecture Summary
 
 1. **Principle of Least Privilege:** UI cannot invoke shell commands directly; all requests route through FastAPI policy validators.
-2. **Containerized Execution:** Arbitrary code compilation and test execution run inside rootless Docker containers with blocked network access by default.
+2. **Containerized Execution:** Arbitrary code compilation and test execution run inside non-root Docker containers (`uid:gid 1000:1000`) via Docker Desktop WSL2 backend with blocked network access by default.
 3. **Secret Hygiene:** Gitleaks scans all outgoing diffs and file patches. OS Credential Manager stores API tokens.
 4. **Air-Gapped Operation:** All core AI components (Ollama, FastEmbed, Tree-sitter, SQLite) run locally without outbound network telemetry.
 
