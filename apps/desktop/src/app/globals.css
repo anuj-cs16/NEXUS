@@ -1,0 +1,106 @@
+@import 'tailwindcss';
+
+/* ============================================================
+   NEXUS Design System — CSS Custom Properties
+   Source of truth: NEXUS_DESIGN_DOC.md §9 Color System
+   
+   Dark-first, technical, premium aesthetic.
+   ============================================================ */
+
+@theme {
+  /* --- NEXUS Color Palette --- */
+  --color-nexus-bg: #0a0a0f;
+  --color-nexus-bg-elevated: #12121a;
+  --color-nexus-bg-surface: #1a1a25;
+  --color-nexus-bg-overlay: #22222f;
+  
+  --color-nexus-text: #e8e8ed;
+  --color-nexus-text-secondary: #9494a8;
+  --color-nexus-text-tertiary: #6b6b80;
+  --color-nexus-text-inverse: #0a0a0f;
+  
+  --color-nexus-border: #2a2a3a;
+  --color-nexus-border-focus: #5b5bf0;
+  
+  /* --- Accent Colors --- */
+  --color-nexus-accent: #6366f1;
+  --color-nexus-accent-hover: #818cf8;
+  --color-nexus-accent-glow: rgba(99, 102, 241, 0.15);
+  
+  /* --- Agent Status Colors --- */
+  --color-nexus-success: #22c55e;
+  --color-nexus-warning: #f59e0b;
+  --color-nexus-error: #ef4444;
+  --color-nexus-info: #3b82f6;
+  
+  /* --- Risk Level Colors --- */
+  --color-nexus-risk-low: #22c55e;
+  --color-nexus-risk-medium: #f59e0b;
+  --color-nexus-risk-high: #ef4444;
+  --color-nexus-risk-critical: #dc2626;
+  
+  /* --- Agent Identity Colors --- */
+  --color-agent-planner: #818cf8;
+  --color-agent-developer: #34d399;
+  --color-agent-tester: #fbbf24;
+  --color-agent-debugger: #f87171;
+  --color-agent-security: #f472b6;
+  --color-agent-reviewer: #60a5fa;
+
+  /* --- Typography --- */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+
+  /* --- Spacing Scale --- */
+  --spacing-panel-gap: 1px;
+  
+  /* --- Border Radius --- */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+}
+
+/* --- Base Styles --- */
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-nexus-bg);
+  color: var(--color-nexus-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* --- Scrollbar Styling (dark theme) --- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-nexus-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-nexus-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-nexus-text-tertiary);
+}
+
+/* --- Selection --- */
+::selection {
+  background-color: var(--color-nexus-accent-glow);
+  color: var(--color-nexus-text);
+}
+
+/* --- Focus Ring --- */
+*:focus-visible {
+  outline: 2px solid var(--color-nexus-border-focus);
+  outline-offset: 2px;
+}
