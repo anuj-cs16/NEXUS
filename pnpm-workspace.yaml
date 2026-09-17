@@ -2,3 +2,5 @@ packages:
   - "apps/*"
   - "packages/*"
   # services/ is Python (uv-managed), not part of pnpm workspace
+allowBuilds:
+  unrs-resolver: true

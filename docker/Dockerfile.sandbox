@@ -1,0 +1,38 @@
+# NEXUS Sandbox Dockerfile
+# Default execution environment for AI-generated code.
+# Per NEXUS Tech Stack §20: Docker Sandbox Security Controls.
+#
+# Security constraints:
+# - Non-root execution (uid:gid = 1000:1000)
+# - Read-only root filesystem at runtime
+# - No network access (--network none) at runtime
+# - Resource limits enforced via cgroup caps
+
+FROM debian:bookworm-slim
+
+# Install common build tools and language runtimes
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3 \
+    python3-pip \
+    python3-venv \
+    nodejs \
+    npm \
+    git \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user (uid:gid 1000:1000)
+RUN groupadd -g 1000 nexus && \
+    useradd -u 1000 -g nexus -m -s /bin/bash nexus
+
+# Create workspace directory
+RUN mkdir -p /workspace && chown nexus:nexus /workspace
+
+# Switch to non-root user
+USER nexus
+WORKDIR /workspace
+
+# Default command — interactive shell for agent sessions
+CMD ["/bin/bash"]

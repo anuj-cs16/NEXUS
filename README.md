@@ -27,11 +27,85 @@ All architectural specifications are documented in the [`docs/`](./docs) directo
 
 * **Desktop Shell:** Tauri v2 (Rust)
 * **Frontend:** Next.js 15 (Static Export) + React 19 + Tailwind CSS + shadcn/ui + CodeMirror 6 + xterm.js
-* **Backend:** Python 3.12 + FastAPI + Async DAG Orchestrator
+* **Backend:** Python 3.12+ + FastAPI + Async DAG Orchestrator
 * **Local Inference:** Ollama (`qwen2.5-coder:14b` / `llama3.3`) + FastEmbed (ONNX)
 * **Database & Vectors:** SQLite 3.45 (WAL Mode) + `sqlite-vec`
 * **Sandbox:** Docker Engine (rootless, `--network none`)
 * **Code Review:** CodeRabbit AI + Gitleaks Secret Scanner
+* **Monorepo:** pnpm workspaces + Turborepo
+
+---
+
+## 📂 Project Structure
+
+```
+nexus/
+├── apps/
+│   └── desktop/             # Tauri Shell + Next.js UI
+├── services/
+│   └── backend/             # Python 3.12 FastAPI Engine
+├── packages/
+│   ├── shared-types/        # TypeScript types mirroring backend Pydantic schemas
+│   ├── ui/                  # Shared React component primitives (shadcn/ui)
+│   └── config/              # Shared Tailwind & ESLint configurations
+├── docker/                  # Default sandbox Dockerfiles
+├── tests/                   # End-to-end and SWE evaluation suites
+└── docs/                    # Architecture, PRD, and Design specs
+```
+
+---
+
+## 🚧 Development Setup
+
+### Prerequisites
+
+* **Node.js** ≥ 22.x LTS
+* **pnpm** ≥ 9.x (`npm install -g pnpm`)
+* **Python** ≥ 3.12
+* **uv** (Python package manager: `pip install uv`)
+* **Rust** stable (`rustup default stable`) — for Tauri compilation
+* **Docker Desktop** v26+ with WSL2 backend
+* **Ollama** v0.4+ with `qwen2.5-coder:14b` installed
+
+### Quick Start
+
+```bash
+# 1. Install JavaScript dependencies
+pnpm install
+
+# 2. Install Python dependencies
+cd services/backend
+uv sync
+cd ../..
+
+# 3. Start the backend (in one terminal)
+cd services/backend
+uv run uvicorn nexus.main:app --reload --host 127.0.0.1 --port 8000
+
+# 4. Start the frontend (in another terminal)
+pnpm --filter @nexus/desktop dev
+
+# 5. (Optional) Launch Tauri desktop app
+cd apps/desktop
+pnpm tauri dev
+```
+
+### Backend API Documentation
+
+When running in debug mode, FastAPI auto-generates API docs:
+* **Swagger UI:** http://127.0.0.1:8000/docs
+* **ReDoc:** http://127.0.0.1:8000/redoc
+
+### Running Tests
+
+```bash
+# Backend tests
+cd services/backend
+uv run pytest tests/ -v
+
+# Frontend type checking
+pnpm typecheck
+```
 
 ---
 

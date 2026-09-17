@@ -1,0 +1,40 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegram/nicetauri/refs/heads/v2/tooling/cli/schema.json",
+  "productName": "NEXUS",
+  "version": "0.1.0",
+  "identifier": "com.nexus.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm next dev --turbopack --port 3000",
+    "devUrl": "http://localhost:3000",
+    "beforeBuildCommand": "pnpm next build",
+    "frontendDist": "../out"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "NEXUS — AI Software Engineer",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
