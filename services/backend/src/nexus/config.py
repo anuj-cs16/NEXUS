@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     # Ollama
     OLLAMA_BASE_URL: str = "http://127.0.0.1:11434"
     OLLAMA_DEFAULT_MODEL: str = "qwen2.5-coder:14b"
+    OLLAMA_MODEL: str = "qwen2.5-coder:14b"
 
     # Logging
     LOG_LEVEL: str = "INFO"

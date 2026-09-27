@@ -12,6 +12,8 @@ from pydantic import BaseModel
 
 from nexus.config import settings
 
+from nexus.ai.ollama_adapter import OllamaAdapter
+
 router = APIRouter()
 
 
@@ -24,6 +26,7 @@ class HealthResponse(BaseModel):
     python_version: str
     platform: str
     ollama_url: str
+    ollama_status: str
     debug: bool
 
 
@@ -35,6 +38,9 @@ async def health_check() -> HealthResponse:
     - Tauri desktop shell to verify backend is alive
     - Mobile companion to verify desktop reachability
     """
+    ollama = OllamaAdapter()
+    is_connected = await ollama.check_health()
+
     return HealthResponse(
         status="ok",
         version=settings.VERSION,
@@ -42,5 +48,6 @@ async def health_check() -> HealthResponse:
         python_version=sys.version,
         platform=platform.system(),
         ollama_url=settings.OLLAMA_BASE_URL,
+        ollama_status="connected" if is_connected else "disconnected",
         debug=settings.DEBUG,
     )

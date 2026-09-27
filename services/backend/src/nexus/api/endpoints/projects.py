@@ -1,84 +1,61 @@
-"""Project management endpoints.
+"""Project management endpoints — real database-backed CRUD.
 
-Provides CRUD operations for registered project workspaces.
-Per NEXUS Tech Stack §27: /api/v1/projects — GET / POST
+Per NEXUS Tech Stack §27: /api/v1/projects — GET / POST / PATCH / DELETE
 """
 
-from datetime import datetime, timezone
-from uuid import uuid4
+from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter
+
+from nexus.api.dependencies import DbSession
+from nexus.schemas.project import (
+    ProjectCreate,
+    ProjectListResponse,
+    ProjectResponse,
+    ProjectUpdate,
+)
+from nexus.services.project_service import ProjectService
 
 router = APIRouter()
 
 
-# --- Schemas ---
-
-
-class ProjectCreate(BaseModel):
-    """Schema for creating a new project registration."""
-
-    name: str = Field(..., min_length=1, max_length=255, description="Project display name")
-    path: str = Field(..., min_length=1, description="Absolute filesystem path to project root")
-    description: str = Field(default="", max_length=1000)
-
-
-class ProjectResponse(BaseModel):
-    """Schema for project response."""
-
-    id: str
-    name: str
-    path: str
-    description: str
-    created_at: str
-    status: str
-
-
-class ProjectListResponse(BaseModel):
-    """Schema for project list response."""
-
-    projects: list[ProjectResponse]
-    total: int
-
-
-# --- In-memory store (replaced by SQLite in next phase) ---
-
-_projects: dict[str, ProjectResponse] = {}
-
-
-# --- Endpoints ---
-
-
 @router.get("", response_model=ProjectListResponse)
-async def list_projects() -> ProjectListResponse:
+async def list_projects(session: DbSession) -> ProjectListResponse:
     """List all registered project workspaces."""
-    projects = list(_projects.values())
+    service = ProjectService(session)
+    projects = await service.list_projects()
     return ProjectListResponse(projects=projects, total=len(projects))
 
 
 @router.post("", response_model=ProjectResponse, status_code=201)
-async def create_project(project: ProjectCreate) -> ProjectResponse:
+async def create_project(project: ProjectCreate, session: DbSession) -> ProjectResponse:
     """Register a new project workspace.
 
     Validates the project path exists and initializes workspace metadata.
+    Auto-detects primary language and framework.
     """
-    project_id = f"prj_{uuid4().hex[:12]}"
-    response = ProjectResponse(
-        id=project_id,
-        name=project.name,
-        path=project.path,
-        description=project.description,
-        created_at=datetime.now(timezone.utc).isoformat(),
-        status="active",
-    )
-    _projects[project_id] = response
-    return response
+    service = ProjectService(session)
+    return await service.create_project(project)
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
-async def get_project(project_id: str) -> ProjectResponse:
+async def get_project(project_id: str, session: DbSession) -> ProjectResponse:
     """Get details for a specific project."""
-    if project_id not in _projects:
-        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
-    return _projects[project_id]
+    service = ProjectService(session)
+    return await service.get_project(project_id)
+
+
+@router.patch("/{project_id}", response_model=ProjectResponse)
+async def update_project(
+    project_id: str, data: ProjectUpdate, session: DbSession
+) -> ProjectResponse:
+    """Update project metadata (name, description, status)."""
+    service = ProjectService(session)
+    return await service.update_project(project_id, data)
+
+
+@router.delete("/{project_id}", status_code=204)
+async def delete_project(project_id: str, session: DbSession) -> None:
+    """Delete a project and all associated tasks."""
+    service = ProjectService(session)
+    await service.delete_project(project_id)
