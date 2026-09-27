@@ -1,106 +1,175 @@
 @import 'tailwindcss';
 
 /* ============================================================
-   NEXUS Design System — CSS Custom Properties
-   Source of truth: NEXUS_DESIGN_DOC.md §9 Color System
-   
-   Dark-first, technical, premium aesthetic.
+   NEXUS Cyber Command Center Design System
+   Visual Identity Override: Futuristic Cyber Operations Workstation
    ============================================================ */
 
 @theme {
-  /* --- NEXUS Color Palette --- */
-  --color-nexus-bg: #0a0a0f;
-  --color-nexus-bg-elevated: #12121a;
-  --color-nexus-bg-surface: #1a1a25;
-  --color-nexus-bg-overlay: #22222f;
+  /* --- Primary Cyber Palette --- */
+  --color-nexus-bg-primary: #050B18;
+  --color-nexus-bg-secondary: #0A1225;
+  --color-nexus-bg-panel: #111C35;
+  --color-nexus-bg-elevated: #172544;
   
-  --color-nexus-text: #e8e8ed;
-  --color-nexus-text-secondary: #9494a8;
-  --color-nexus-text-tertiary: #6b6b80;
-  --color-nexus-text-inverse: #0a0a0f;
-  
-  --color-nexus-border: #2a2a3a;
-  --color-nexus-border-focus: #5b5bf0;
-  
-  /* --- Accent Colors --- */
-  --color-nexus-accent: #6366f1;
-  --color-nexus-accent-hover: #818cf8;
-  --color-nexus-accent-glow: rgba(99, 102, 241, 0.15);
-  
-  /* --- Agent Status Colors --- */
-  --color-nexus-success: #22c55e;
-  --color-nexus-warning: #f59e0b;
-  --color-nexus-error: #ef4444;
-  --color-nexus-info: #3b82f6;
-  
-  /* --- Risk Level Colors --- */
-  --color-nexus-risk-low: #22c55e;
-  --color-nexus-risk-medium: #f59e0b;
-  --color-nexus-risk-high: #ef4444;
-  --color-nexus-risk-critical: #dc2626;
-  
-  /* --- Agent Identity Colors --- */
-  --color-agent-planner: #818cf8;
-  --color-agent-developer: #34d399;
-  --color-agent-tester: #fbbf24;
-  --color-agent-debugger: #f87171;
-  --color-agent-security: #f472b6;
-  --color-agent-reviewer: #60a5fa;
+  /* --- Cyber Accent Colors --- */
+  --color-nexus-cyan: #52E5FF;
+  --color-nexus-electric-blue: #398BFF;
+  --color-nexus-violet: #9B7CFF;
+  --color-nexus-soft-purple: #C4A2FF;
+
+  /* --- Text Hierarchy --- */
+  --color-nexus-text-primary: #EAF4FF;
+  --color-nexus-text-secondary: #8FA6C8;
+  --color-nexus-text-muted: #647A9B;
+
+  /* --- Status Indicators --- */
+  --color-nexus-success: #45E6B0;
+  --color-nexus-warning: #FFC76A;
+  --color-nexus-error: #FF647C;
+
+  /* --- Borders & Glow --- */
+  --color-nexus-border: #1B2D52;
+  --color-nexus-border-glow: #52E5FF40;
+  --color-nexus-border-violet: #9B7CFF40;
+
+  /* --- Agent Specialization Tones --- */
+  --color-agent-planner: #9B7CFF;
+  --color-agent-developer: #52E5FF;
+  --color-agent-tester: #45E6B0;
+  --color-agent-debugger: #FF647C;
+  --color-agent-security: #FFC76A;
+  --color-agent-reviewer: #398BFF;
 
   /* --- Typography --- */
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
-
-  /* --- Spacing Scale --- */
-  --spacing-panel-gap: 1px;
-  
-  /* --- Border Radius --- */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
 }
 
-/* --- Base Styles --- */
+/* --- Base Workstation Styles --- */
 html {
   color-scheme: dark;
+  background-color: #050B18;
 }
 
 body {
-  background-color: var(--color-nexus-bg);
-  color: var(--color-nexus-text);
+  background-color: #050B18;
+  color: #EAF4FF;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* --- Scrollbar Styling (dark theme) --- */
+/* --- Technical Cyber Grid Background --- */
+.cyber-grid-bg {
+  background-color: #050B18;
+  background-image: 
+    linear-gradient(to right, rgba(82, 229, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(82, 229, 255, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.cyber-grid-dense {
+  background-image: 
+    linear-gradient(to right, rgba(155, 124, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(155, 124, 255, 0.04) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+/* --- Cyber Panel Styling --- */
+.cyber-panel {
+  background-color: #111C35;
+  border: 1px solid #1B2D52;
+  border-radius: 12px;
+  position: relative;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cyber-panel:hover {
+  border-color: rgba(82, 229, 255, 0.3);
+  box-shadow: 0 4px 20px -2px rgba(82, 229, 255, 0.08);
+}
+
+.cyber-panel-elevated {
+  background-color: #172544;
+  border: 1px solid #233A66;
+  border-radius: 12px;
+}
+
+/* --- Cyber Glow Utilities --- */
+.glow-cyan {
+  box-shadow: 0 0 15px rgba(82, 229, 255, 0.25);
+}
+
+.glow-cyan-sm {
+  box-shadow: 0 0 8px rgba(82, 229, 255, 0.2);
+}
+
+.glow-violet {
+  box-shadow: 0 0 15px rgba(155, 124, 255, 0.25);
+}
+
+.glow-violet-sm {
+  box-shadow: 0 0 8px rgba(155, 124, 255, 0.2);
+}
+
+.text-glow-cyan {
+  text-shadow: 0 0 8px rgba(82, 229, 255, 0.6);
+}
+
+.text-glow-violet {
+  text-shadow: 0 0 8px rgba(155, 124, 255, 0.6);
+}
+
+/* --- Radar Sweep & Concentric Core Animations --- */
+@keyframes radar-sweep {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse-ring {
+  0%, 100% { transform: scale(1); opacity: 0.3; }
+  50% { transform: scale(1.08); opacity: 0.7; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { filter: drop-shadow(0 0 4px #52E5FF); }
+  50% { filter: drop-shadow(0 0 12px #52E5FF); }
+}
+
+.animate-radar {
+  animation: radar-sweep 6s linear infinite;
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 3s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2.5s ease-in-out infinite;
+}
+
+/* --- Scrollbar Customization --- */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-nexus-bg);
+  background: #050B18;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-nexus-border);
-  border-radius: 4px;
+  background: #1B2D52;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-nexus-text-tertiary);
+  background: #398BFF;
 }
 
 /* --- Selection --- */
 ::selection {
-  background-color: var(--color-nexus-accent-glow);
-  color: var(--color-nexus-text);
-}
-
-/* --- Focus Ring --- */
-*:focus-visible {
-  outline: 2px solid var(--color-nexus-border-focus);
-  outline-offset: 2px;
+  background-color: rgba(82, 229, 255, 0.25);
+  color: #EAF4FF;
 }

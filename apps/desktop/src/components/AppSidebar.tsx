@@ -2,6 +2,24 @@
 
 import React from 'react';
 import { ScreenId } from '../types/nexus';
+import {
+  Terminal,
+  Activity,
+  Search,
+  Cpu,
+  Boxes,
+  ListTodo,
+  Workflow,
+  Brain,
+  FolderTree,
+  AppWindow,
+  Sliders,
+  TrendingUp,
+  Bell,
+  Plug,
+  Settings,
+  ShieldAlert,
+} from 'lucide-react';
 
 interface AppSidebarProps {
   currentScreen: ScreenId;
@@ -16,61 +34,61 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 }) => {
   const navSections = [
     {
-      title: 'CORE ENVIRONMENT',
+      title: 'COMMAND & CONTROL',
       items: [
-        { id: '01-home' as ScreenId, label: 'Home / Core', icon: '🏠', badge: undefined },
-        { id: '02-command' as ScreenId, label: 'AI Command', icon: '💬', badge: 'PRO' },
-        { id: '11-activity' as ScreenId, label: 'Live Activity', icon: '⚡', badge: 'LIVE' },
-        { id: '12-trace' as ScreenId, label: 'NEXUS Trace', icon: '🔍', badge: undefined },
+        { id: '01-home' as ScreenId, label: 'Command Center', icon: <Terminal className="h-4 w-4 text-[#52E5FF]" />, badge: 'LIVE' },
+        { id: '02-command' as ScreenId, label: 'AI Console', icon: <Cpu className="h-4 w-4 text-[#9B7CFF]" />, badge: 'AGENTS' },
+        { id: '11-activity' as ScreenId, label: 'Live Operations', icon: <Activity className="h-4 w-4 text-[#45E6B0]" />, badge: undefined },
+        { id: '12-trace' as ScreenId, label: 'NEXUS Trace', icon: <Search className="h-4 w-4 text-[#398BFF]" />, badge: undefined },
       ],
     },
     {
-      title: 'INTELLIGENCE',
+      title: 'INTELLIGENCE MODULES',
       items: [
-        { id: '04-modules' as ScreenId, label: 'AI Modules', icon: '🤖', badge: '7' },
-        { id: '06-tasks' as ScreenId, label: 'Tasks & Sprints', icon: '📋', badge: '3' },
-        { id: '08-automations' as ScreenId, label: 'Automations', icon: '⚙️', badge: '2' },
-        { id: '17-memory' as ScreenId, label: 'Memory Center', icon: '🧠', badge: undefined },
+        { id: '04-modules' as ScreenId, label: 'Active Modules', icon: <Boxes className="h-4 w-4 text-[#52E5FF]" />, badge: '7 ACTIVE' },
+        { id: '06-tasks' as ScreenId, label: 'Task Execution', icon: <ListTodo className="h-4 w-4 text-[#FFC76A]" />, badge: '3' },
+        { id: '08-automations' as ScreenId, label: 'Automations', icon: <Workflow className="h-4 w-4 text-[#9B7CFF]" />, badge: '2' },
+        { id: '17-memory' as ScreenId, label: 'Memory Palace', icon: <Brain className="h-4 w-4 text-[#C4A2FF]" />, badge: undefined },
       ],
     },
     {
-      title: 'WORKSPACE & OS',
+      title: 'WORKSPACE & SYSTEM',
       items: [
-        { id: '13-files' as ScreenId, label: 'Files Explorer', icon: '📁', badge: undefined },
-        { id: '15-apps' as ScreenId, label: 'Applications', icon: '💻', badge: '4' },
-        { id: '16-system' as ScreenId, label: 'System Control', icon: '🖥️', badge: '12%' },
-        { id: '19-insights' as ScreenId, label: 'Productivity Insights', icon: '📈', badge: '+3.4h' },
+        { id: '13-files' as ScreenId, label: 'File Matrix', icon: <FolderTree className="h-4 w-4 text-[#398BFF]" />, badge: undefined },
+        { id: '15-apps' as ScreenId, label: 'Tool Ecosystem', icon: <AppWindow className="h-4 w-4 text-[#52E5FF]" />, badge: '4 RUNNING' },
+        { id: '16-system' as ScreenId, label: 'System Control', icon: <Sliders className="h-4 w-4 text-[#45E6B0]" />, badge: '14%' },
+        { id: '19-insights' as ScreenId, label: 'Telemetry & Stats', icon: <TrendingUp className="h-4 w-4 text-[#FFC76A]" />, badge: undefined },
       ],
     },
     {
-      title: 'SYSTEM & CONFIG',
+      title: 'SECURITY & CONFIG',
       items: [
-        { id: '20-notifications' as ScreenId, label: 'Notifications', icon: '🔔', badge: unreadCount > 0 ? String(unreadCount) : undefined },
-        { id: '22-integrations' as ScreenId, label: 'Integrations', icon: '🔌', badge: '6' },
-        { id: '21-settings' as ScreenId, label: 'Settings', icon: '⚙️', badge: undefined },
+        { id: '20-notifications' as ScreenId, label: 'Alerts & Events', icon: <Bell className="h-4 w-4 text-[#FF647C]" />, badge: unreadCount > 0 ? String(unreadCount) : undefined },
+        { id: '22-integrations' as ScreenId, label: 'Integrations', icon: <Plug className="h-4 w-4 text-[#9B7CFF]" />, badge: '6' },
+        { id: '21-settings' as ScreenId, label: 'System Settings', icon: <Settings className="h-4 w-4 text-[#8FA6C8]" />, badge: undefined },
       ],
     },
   ];
 
   return (
-    <aside className="w-64 border-r border-[#2a2a3a] bg-[#12121a] flex flex-col shrink-0 select-none">
-      {/* Brand Header */}
-      <div className="h-14 px-4 flex items-center justify-between border-b border-[#2a2a3a]">
+    <aside className="w-64 border-r border-[#1B2D52] bg-[#0A1225] flex flex-col shrink-0 select-none text-[#EAF4FF]">
+      {/* Workstation Brand Header */}
+      <div className="h-14 px-4 flex items-center justify-between border-b border-[#1B2D52]">
         <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => onNavigate('01-home')}>
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-[#6366f1] via-[#818cf8] to-[#a855f7] flex items-center justify-center shadow-lg shadow-[#6366f1]/20 ring-1 ring-white/20">
-            <span className="font-mono font-black text-sm text-white">N</span>
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-[#050B18] via-[#111C35] to-[#172544] border border-[#52E5FF]/60 flex items-center justify-center shadow-[0_0_12px_rgba(82,229,255,0.25)]">
+            <span className="font-mono font-black text-xs text-[#52E5FF] tracking-wider">NX</span>
           </div>
           <div className="flex flex-col">
-            <span className="font-mono font-bold tracking-wider text-sm bg-gradient-to-r from-white via-slate-100 to-indigo-300 bg-clip-text text-transparent">
-              NEXUS
+            <span className="font-mono font-bold tracking-widest text-sm text-[#EAF4FF] flex items-center gap-1">
+              NEXUS <span className="text-[10px] text-[#52E5FF] font-semibold">OPS</span>
             </span>
-            <span className="text-[10px] text-[#9494a8] font-mono">Autonomous AI OS</span>
+            <span className="text-[9px] text-[#647A9B] font-mono tracking-wider">AI COMMAND CENTER</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-[#22c55e] animate-pulse" />
-          <span className="text-[10px] font-mono font-semibold text-[#22c55e]">ONLINE</span>
+        <div className="flex items-center gap-1 bg-[#050B18] border border-[#1B2D52] px-2 py-0.5 rounded">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#45E6B0] shadow-[0_0_6px_#45E6B0] animate-pulse" />
+          <span className="text-[9px] font-mono font-bold text-[#45E6B0]">ONLINE</span>
         </div>
       </div>
 
@@ -78,7 +96,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
         {navSections.map((section, sIdx) => (
           <div key={sIdx} className="space-y-1">
-            <div className="px-2 text-[10px] font-mono font-bold tracking-wider text-[#6b6b80] uppercase">
+            <div className="px-2 text-[9px] font-mono font-bold tracking-widest text-[#647A9B] uppercase">
               {section.title}
             </div>
             {section.items.map((item) => {
@@ -87,24 +105,24 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                 <button
                   key={item.id}
                   onClick={() => onNavigate(item.id)}
-                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-mono transition cursor-pointer ${
                     isActive
-                      ? 'bg-[#1a1a25] text-white border border-[#6366f1]/50 shadow-sm shadow-[#6366f1]/10'
-                      : 'text-[#9494a8] hover:bg-[#1a1a25]/60 hover:text-[#e8e8ed]'
+                      ? 'bg-[#111C35] text-[#52E5FF] border border-[#52E5FF]/60 shadow-[0_0_10px_rgba(82,229,255,0.15)] font-semibold'
+                      : 'text-[#8FA6C8] hover:bg-[#111C35]/60 hover:text-[#EAF4FF] border border-transparent'
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <span className="text-sm">{item.icon}</span>
-                    <span>{item.label}</span>
+                    {item.icon}
+                    <span className="tracking-wide">{item.label}</span>
                   </div>
                   {item.badge && (
                     <span
-                      className={`text-[9px] font-mono px-1.5 py-0.2 rounded font-bold ${
+                      className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
                         item.badge === 'LIVE'
-                          ? 'bg-[#ef4444]/20 text-[#ef4444] border border-[#ef4444]/30 animate-pulse'
-                          : isActive
-                          ? 'bg-[#6366f1]/20 text-[#818cf8]'
-                          : 'bg-[#2a2a3a] text-[#9494a8]'
+                          ? 'bg-[#52E5FF]/10 text-[#52E5FF] border-[#52E5FF]/40 shadow-[0_0_6px_rgba(82,229,255,0.2)]'
+                          : item.badge === 'AGENTS'
+                          ? 'bg-[#9B7CFF]/10 text-[#9B7CFF] border-[#9B7CFF]/40'
+                          : 'bg-[#050B18] text-[#8FA6C8] border-[#1B2D52]'
                       }`}
                     >
                       {item.badge}
@@ -117,28 +135,13 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         ))}
       </div>
 
-      {/* Bottom User / Quick Action Profile */}
-      <div className="p-3 border-t border-[#2a2a3a] bg-[#0e0e16] flex items-center justify-between">
-        <div
-          className="flex items-center gap-2.5 cursor-pointer hover:opacity-80 transition"
-          onClick={() => onNavigate('30-profile-menu')}
-        >
-          <div className="h-7 w-7 rounded-full bg-gradient-to-tr from-[#6366f1] to-[#ec4899] flex items-center justify-center font-bold text-xs text-white">
-            U
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xs font-semibold text-white">Alex Developer</span>
-            <span className="text-[10px] text-[#6b6b80] font-mono">Pro Workspace</span>
-          </div>
+      {/* Node Telemetry Status Footer */}
+      <div className="p-3 border-t border-[#1B2D52] bg-[#050B18] flex items-center justify-between text-[10px] font-mono text-[#647A9B]">
+        <div className="flex items-center gap-1.5">
+          <div className="h-2 w-2 rounded-full bg-[#52E5FF] animate-pulse" />
+          <span className="text-[#8FA6C8]">WORKSTATION #01</span>
         </div>
-
-        <button
-          onClick={() => onNavigate('03-palette')}
-          title="Open Command Palette (Ctrl+K)"
-          className="rounded border border-[#2a2a3a] bg-[#1a1a25] px-1.5 py-0.5 text-[10px] font-mono text-[#818cf8] hover:bg-[#22222f] transition cursor-pointer"
-        >
-          ⌘K
-        </button>
+        <span className="text-[#52E5FF]">v1.0.0</span>
       </div>
     </aside>
   );

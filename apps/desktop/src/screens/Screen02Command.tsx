@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { ScreenId } from '../types/nexus';
+import { Terminal, Cpu, Zap, Mic, Play, CornerDownLeft, Sparkles, CheckCircle2, ShieldAlert, Activity } from 'lucide-react';
 
 interface Screen02CommandProps {
   onNavigate: (screen: ScreenId) => void;
@@ -20,16 +21,16 @@ export const Screen02Command: React.FC<Screen02CommandProps> = ({
   const [responseLog, setResponseLog] = useState<string | null>(null);
 
   const suggestedCommands = [
-    { cat: 'Development', text: 'Synthesize rate-limiting middleware in src/nexus/core/limiter.py and write unit tests' },
-    { cat: 'Workspace', text: 'Find my latest project files and check for uncommitted git changes' },
-    { cat: 'Automation', text: 'Open VS Code and launch the morning development workflow' },
-    { cat: 'Productivity', text: 'Summarize today\'s work and generate pull request draft' },
+    { cat: 'ENGINEERING', text: 'Synthesize rate-limiting middleware in src/nexus/core/limiter.py and execute pytest suite' },
+    { cat: 'WORKSPACE', text: 'Find recent project files and inspect uncommitted git modifications' },
+    { cat: 'AUTOMATION', text: 'Launch morning engineering workflow and run verification checks' },
+    { cat: 'SECURITY', text: 'Audit tool execution permission boundaries and secret exposure policies' },
   ];
 
   const recentCommands = [
-    'Create a task to finish the PRD',
-    'Run full pytest suite in backend sandbox',
-    'Analyze dependencies in pyproject.toml',
+    'Execute full pytest suite in backend sandbox',
+    'Synthesize database backup manifest and verify SHA-256 digests',
+    'Inspect Ollama Qwen2.5-Coder VRAM allocation and active contexts',
   ];
 
   const handleExecute = (cmdText: string) => {
@@ -37,163 +38,170 @@ export const Screen02Command: React.FC<Screen02CommandProps> = ({
     if (!text.trim()) return;
 
     setExecutionState('understanding');
-    setResponseLog(`Understanding intent: "${text}"...\nGathering AST context from workspace...\nSelecting appropriate agent tools: [read_file, patch_file, execute_command]`);
+    setResponseLog(`[SYSTEM:PARSER] Analyzing intent: "${text}"...\n[AST:CONTEXT] Gathering code context from services/backend/src/...\n[AGENT:ROUTER] Selecting agent toolchain: [read_file, patch_file, execute_command, run_tests]`);
 
     setTimeout(() => {
-      if (text.toLowerCase().includes('open vs code') || text.toLowerCase().includes('workflow')) {
+      if (text.toLowerCase().includes('workflow') || text.toLowerCase().includes('launch')) {
         setExecutionState('confirmation_required');
         onRequestAiConfirmation(
-          'Launch VS Code & Execute Workflow',
+          'Automated Engineering Workflow Execution',
           [
-            'Open Visual Studio Code (c:/NEXUS)',
-            'Check uncommitted git branches',
-            'Run development server & health check',
+            'Inspect target workspace (c:/NEXUS)',
+            'Check uncommitted git branches & diffs',
+            'Execute backend test suite & verify health',
           ]
         );
       } else {
         setExecutionState('executing');
         setResponseLog(
-          `✓ Request parsed successfully\n✓ Target module: NEXUS Builder\n✓ Step 1: Read target file src/nexus/main.py\n✓ Step 2: Formulate architectural plan\n✓ Step 3: Run verification tests\n\nTask created: tsk_${Math.random().toString(36).substring(2, 9).toUpperCase()} [Status: Executing]`
+          `✓ Request parsed into multi-agent DAG\n✓ Target module: NEXUS Builder\n✓ Step 1: Read target file services/backend/src/nexus/main.py\n✓ Step 2: Formulate architectural patch\n✓ Step 3: Run verification tests\n\nTask created: tsk_${Math.random().toString(36).substring(2, 9).toUpperCase()} [Status: EXECUTING IN SANDBOX]`
         );
       }
     }, 1200);
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-y-auto bg-[#0a0a0f] p-8 space-y-6 select-none font-sans max-w-5xl mx-auto w-full">
+    <div className="flex-1 flex flex-col overflow-y-auto bg-[#050B18] p-6 space-y-5 select-none font-mono max-w-5xl mx-auto w-full cyber-grid-bg text-[#EAF4FF]">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[#2a2a3a] pb-4">
+      <div className="flex items-center justify-between border-b border-[#1B2D52] pb-4">
         <div>
-          <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#818cf8]">
-            SCREEN 02 — COMMAND CONSOLE
+          <div className="text-[10px] font-bold uppercase tracking-widest text-[#52E5FF] flex items-center gap-1.5">
+            <Terminal className="h-3.5 w-3.5" /> SCREEN 02 — CYBER COMMAND CONSOLE
           </div>
-          <h2 className="text-xl font-black text-white mt-0.5">NEXUS Command Interface</h2>
+          <h2 className="text-lg font-black text-[#EAF4FF] tracking-wide mt-1">
+            NEXUS AI Autonomous Command Interface
+          </h2>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="rounded-full bg-[#1a1a25] border border-[#2a2a3a] px-3 py-1 text-xs font-mono text-[#9494a8]">
-            Status: <strong className="text-[#34d399] uppercase font-bold">{executionState}</strong>
+          <span className="rounded-md bg-[#111C35] border border-[#1B2D52] px-3 py-1 text-xs text-[#8FA6C8] flex items-center gap-2">
+            <span>ENGINE STATE:</span>
+            <strong className="text-[#52E5FF] uppercase font-bold">{executionState}</strong>
           </span>
         </div>
       </div>
 
-      {/* Primary Command Input Console */}
-      <div className="rounded-2xl bg-[#12121a] border-2 border-[#6366f1]/40 focus-within:border-[#6366f1] p-5 shadow-2xl space-y-4 ring-1 ring-[#6366f1]/20 transition">
+      {/* Primary Cyber Command Input Console */}
+      <div className="rounded-xl bg-[#0A1225] border-2 border-[#1B2D52] focus-within:border-[#52E5FF] p-5 shadow-[0_0_20px_rgba(82,229,255,0.1)] space-y-4 transition">
         <div className="flex items-start gap-4">
-          <span className="text-2xl text-[#6366f1] mt-1 shrink-0">⚡</span>
+          <span className="text-xl text-[#52E5FF] mt-1 shrink-0">⚡</span>
           <textarea
             rows={3}
             autoFocus
-            placeholder="Command NEXUS: e.g. 'Synthesize auth middleware and verify with pytest', 'Open VS Code and load project', 'Summarize today\'s commits'..."
+            placeholder="ENTER COMMAND: e.g. 'Synthesize auth middleware and verify with pytest', 'Check uncommitted git changes', 'Audit tool sandbox policies'..."
             value={commandInput}
             onChange={(e) => setCommandInput(e.target.value)}
-            className="w-full bg-transparent text-sm text-white placeholder-[#6b6b80] outline-none font-mono resize-none leading-relaxed"
+            className="w-full bg-transparent text-xs text-[#EAF4FF] placeholder-[#647A9B] outline-none font-mono resize-none leading-relaxed"
           />
         </div>
 
-        <div className="flex items-center justify-between pt-3 border-t border-[#2a2a3a]">
+        <div className="flex items-center justify-between pt-3 border-t border-[#1B2D52]">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsRecording(!isRecording)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono transition cursor-pointer ${
                 isRecording
-                  ? 'bg-[#ef4444]/20 border-[#ef4444] text-[#ef4444] animate-pulse'
-                  : 'bg-[#1a1a25] border-[#2a2a3a] text-[#9494a8] hover:text-white'
+                  ? 'bg-[#FF647C]/20 border-[#FF647C] text-[#FF647C] animate-pulse'
+                  : 'bg-[#111C35] border-[#1B2D52] text-[#8FA6C8] hover:text-[#EAF4FF] hover:border-[#52E5FF]/40'
               }`}
             >
-              <span>🎙️</span>
-              <span>{isRecording ? 'Listening...' : 'Voice Input'}</span>
+              <Mic className="h-3.5 w-3.5" />
+              <span>{isRecording ? 'RECORDING AUDIO...' : 'VOICE INPUT'}</span>
             </button>
 
-            <kbd className="hidden sm:inline-block rounded bg-[#22222f] border border-[#2a2a3a] px-2 py-1 text-[10px] font-mono text-[#6b6b80]">
-              Press ↵ Enter to run
-            </kbd>
+            <button
+              onClick={() => onRequestPermission('Tool Sandbox', 'Execute arbitrary shell command in Docker container')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#111C35] border border-[#1B2D52] hover:border-[#FFC76A]/50 text-xs text-[#FFC76A] transition cursor-pointer"
+            >
+              <ShieldAlert className="h-3.5 w-3.5" />
+              <span>TEST PERMISSION GATE</span>
+            </button>
           </div>
 
-          <button
-            onClick={() => handleExecute(commandInput)}
-            disabled={!commandInput.trim() && !isRecording}
-            className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#6366f1] to-[#818cf8] hover:opacity-90 disabled:opacity-50 text-xs font-bold text-white shadow-lg shadow-[#6366f1]/25 flex items-center gap-2 transition cursor-pointer"
-          >
-            <span>Execute Command</span>
-            <span>➔</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleExecute(commandInput)}
+              disabled={!commandInput.trim()}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#52E5FF] hover:bg-[#398BFF] disabled:opacity-40 disabled:cursor-not-allowed text-[#050B18] font-bold text-xs font-mono transition cursor-pointer shadow-[0_0_12px_rgba(82,229,255,0.3)]"
+            >
+              <span>DISPATCH COMMAND</span>
+              <CornerDownLeft className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* AI Execution & Response Area */}
+      {/* Real-time Response & Execution Log Console */}
       {responseLog && (
-        <div className="rounded-2xl bg-[#12121a] border border-[#2a2a3a] p-5 shadow-xl space-y-3 font-mono text-xs animate-in fade-in duration-200">
-          <div className="flex items-center justify-between border-b border-[#2a2a3a] pb-2 text-[11px] text-[#818cf8] font-bold">
-            <span>NEXUS EXECUTION ENGINE STREAM</span>
-            <span>2.5s elapsed</span>
+        <div className="p-4 rounded-xl bg-[#0A1225] border border-[#52E5FF]/50 space-y-2 shadow-[0_0_15px_rgba(82,229,255,0.15)]">
+          <div className="flex items-center justify-between text-xs border-b border-[#1B2D52] pb-2">
+            <span className="text-[#52E5FF] font-bold flex items-center gap-2">
+              <Activity className="h-4 w-4 animate-spin-slow" /> AGENT ORCHESTRATION TRACE
+            </span>
+            <span className="text-[#45E6B0] text-[10px]">LIVE OUTPUT</span>
           </div>
-          <div className="whitespace-pre-wrap text-[#e8e8ed] leading-relaxed bg-[#0a0a0f] p-4 rounded-xl border border-[#2a2a3a]">
+          <pre className="text-xs text-[#EAF4FF] font-mono whitespace-pre-wrap leading-relaxed">
             {responseLog}
-          </div>
-          <div className="flex justify-end gap-2 pt-1">
+          </pre>
+          <div className="pt-2 flex items-center justify-end">
             <button
               onClick={() => onNavigate('07-task-detail')}
-              className="px-3 py-1.5 rounded-lg bg-[#6366f1] hover:bg-[#818cf8] text-xs font-semibold text-white transition cursor-pointer"
+              className="px-3 py-1 rounded bg-[#52E5FF]/20 hover:bg-[#52E5FF]/30 border border-[#52E5FF]/50 text-[#52E5FF] text-xs font-bold transition cursor-pointer"
             >
-              Open Full Task Workspace →
+              VIEW IN TASK EXECUTION (SCREEN 07) →
             </button>
           </div>
         </div>
       )}
 
-      {/* Suggested & Recent Commands */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Suggested */}
-        <div className="space-y-3">
-          <h4 className="text-xs font-bold uppercase font-mono text-[#6b6b80] tracking-wider">
-            SUGGESTED WORKFLOW COMMANDS
-          </h4>
-          <div className="space-y-2">
-            {suggestedCommands.map((s, idx) => (
-              <div
-                key={idx}
-                onClick={() => {
-                  setCommandInput(s.text);
-                  handleExecute(s.text);
-                }}
-                className="p-3 rounded-xl bg-[#12121a] hover:bg-[#1a1a25] border border-[#2a2a3a] hover:border-[#6366f1]/50 cursor-pointer transition flex items-start justify-between gap-3 group"
-              >
-                <div className="space-y-1">
-                  <span className="rounded bg-[#22222f] px-1.5 py-0.5 text-[9px] font-mono text-[#818cf8]">
-                    {s.cat}
-                  </span>
-                  <p className="text-xs text-[#e8e8ed] group-hover:text-white">{s.text}</p>
-                </div>
-                <span className="text-[#6366f1] text-xs opacity-0 group-hover:opacity-100 transition">➔</span>
-              </div>
-            ))}
-          </div>
+      {/* Suggested Engineering Commands */}
+      <div className="space-y-3">
+        <div className="text-[10px] font-bold tracking-widest text-[#647A9B] uppercase">
+          RECOMMENDED WORKFLOW COMMANDS
         </div>
-
-        {/* Recent History */}
-        <div className="space-y-3">
-          <h4 className="text-xs font-bold uppercase font-mono text-[#6b6b80] tracking-wider">
-            RECENT COMMAND HISTORY
-          </h4>
-          <div className="space-y-2">
-            {recentCommands.map((rc, idx) => (
-              <div
-                key={idx}
-                onClick={() => {
-                  setCommandInput(rc);
-                  handleExecute(rc);
-                }}
-                className="p-3 rounded-xl bg-[#12121a] hover:bg-[#1a1a25] border border-[#2a2a3a] hover:border-[#6366f1]/50 cursor-pointer transition flex items-center justify-between text-xs text-[#9494a8] hover:text-white"
-              >
-                <div className="flex items-center gap-2">
-                  <span>🕒</span>
-                  <span>{rc}</span>
-                </div>
-                <span className="text-[10px] font-mono text-[#6b6b80]">Re-run</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+          {suggestedCommands.map((cmd, i) => (
+            <div
+              key={i}
+              onClick={() => {
+                setCommandInput(cmd.text);
+                handleExecute(cmd.text);
+              }}
+              className="p-3 rounded-xl bg-[#0A1225] hover:bg-[#111C35] border border-[#1B2D52] hover:border-[#52E5FF]/50 cursor-pointer transition flex items-start gap-3 group"
+            >
+              <span className="text-[#52E5FF] mt-0.5 group-hover:scale-110 transition">⚡</span>
+              <div className="flex flex-col space-y-1">
+                <span className="text-[9px] font-bold text-[#52E5FF] tracking-wider uppercase">
+                  [{cmd.cat}]
+                </span>
+                <span className="text-xs text-[#8FA6C8] group-hover:text-[#EAF4FF] leading-snug">
+                  {cmd.text}
+                </span>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Historical Execution Log */}
+      <div className="space-y-2 pt-2 border-t border-[#1B2D52]">
+        <div className="text-[10px] font-bold tracking-widest text-[#647A9B] uppercase">
+          RECENT DISPATCH HISTORY
+        </div>
+        <div className="space-y-1.5">
+          {recentCommands.map((cmd, i) => (
+            <div
+              key={i}
+              onClick={() => setCommandInput(cmd)}
+              className="p-2.5 rounded-lg bg-[#0A1225] hover:bg-[#111C35] border border-[#1B2D52] flex items-center justify-between text-xs text-[#8FA6C8] hover:text-[#EAF4FF] cursor-pointer transition"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-[#647A9B]">&gt;</span>
+                <span>{cmd}</span>
+              </div>
+              <span className="text-[10px] text-[#52E5FF] hover:underline">RELOAD</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>

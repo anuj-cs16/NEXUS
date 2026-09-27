@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ScreenId } from '../types/nexus';
+import { Terminal, Shield, Activity, Bell, Search, Layers, Cpu } from 'lucide-react';
 
 interface GlobalHeaderProps {
   currentScreen: ScreenId;
@@ -24,81 +25,114 @@ export const GlobalHeader: React.FC<GlobalHeaderProps> = ({
   ollamaConnected,
   activeModel,
 }) => {
+  const [currentTime, setCurrentTime] = useState<string>('');
+
+  useEffect(() => {
+    const updateClock = () => {
+      const now = new Date();
+      setCurrentTime(now.toLocaleTimeString('en-US', { hour12: false }));
+    };
+    updateClock();
+    const timer = setInterval(updateClock, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   return (
-    <header className="h-14 border-b border-[#2a2a3a] bg-[#12121a] px-5 flex items-center justify-between shrink-0 select-none z-20">
-      {/* Left Search / Global Command input */}
+    <header className="h-14 border-b border-[#1B2D52] bg-[#0A1225] px-5 flex items-center justify-between shrink-0 select-none z-20 text-[#EAF4FF]">
+      {/* Left: Global Command Console Input */}
       <div className="flex items-center gap-3 flex-1 max-w-xl">
         <div
           onClick={onOpenPalette}
-          className="flex-1 flex items-center justify-between bg-[#1a1a25] border border-[#2a2a3a] hover:border-[#6366f1]/50 rounded-lg px-3.5 py-1.5 text-xs text-[#9494a8] cursor-pointer transition shadow-inner group"
+          className="flex-1 flex items-center justify-between bg-[#111C35] border border-[#1B2D52] hover:border-[#52E5FF]/60 rounded-lg px-3.5 py-1.5 text-xs text-[#8FA6C8] cursor-pointer transition shadow-inner group"
         >
           <div className="flex items-center gap-2">
-            <span className="text-[#6366f1] group-hover:scale-110 transition">⚡</span>
-            <span>Ask NEXUS or run commands...</span>
+            <span className="text-[#52E5FF] group-hover:scale-110 transition drop-shadow-[0_0_8px_#52E5FF]">⚡</span>
+            <span className="font-mono text-[11px] tracking-wide text-[#8FA6C8] group-hover:text-[#EAF4FF]">
+              COMMAND_LINE: Ask NEXUS or execute tool...
+            </span>
           </div>
-          <kbd className="hidden sm:inline-block rounded bg-[#22222f] border border-[#2a2a3a] px-1.5 py-0.5 text-[10px] font-mono text-[#818cf8]">
-            Ctrl + K
+          <kbd className="hidden sm:inline-flex items-center gap-1 rounded bg-[#050B18] border border-[#1B2D52] px-2 py-0.5 text-[10px] font-mono text-[#52E5FF]">
+            <span>CTRL</span> + <span>K</span>
           </kbd>
         </div>
 
         <button
           onClick={onOpenGlobalSearch}
-          title="Universal Search (Files, Apps, Tasks, Memory)"
-          className="rounded-lg bg-[#1a1a25] hover:bg-[#22222f] border border-[#2a2a3a] p-2 text-xs text-[#9494a8] hover:text-white transition cursor-pointer"
+          title="Universal Search (Files, AST, Tasks, Memory)"
+          className="rounded-lg bg-[#111C35] hover:bg-[#172544] border border-[#1B2D52] hover:border-[#52E5FF]/40 p-2 text-xs text-[#8FA6C8] hover:text-[#52E5FF] transition cursor-pointer"
         >
-          🔍
+          <Search className="h-4 w-4" />
         </button>
       </div>
 
-      {/* Right Telemetry & Quick Action Controls */}
+      {/* Center: Live Workstation Telemetry Status */}
+      <div className="hidden xl:flex items-center gap-6 text-[11px] font-mono">
+        <div className="flex items-center gap-2 text-[#8FA6C8]">
+          <span className="text-[#647A9B]">WORKSPACE:</span>
+          <span className="text-[#EAF4FF] font-semibold tracking-wider">NEXUS_CORE_DEV</span>
+        </div>
+        <div className="h-3 w-px bg-[#1B2D52]" />
+        <div className="flex items-center gap-2">
+          <span className="text-[#647A9B]">ENGINE:</span>
+          <span className="text-[#52E5FF] font-bold flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#52E5FF] animate-pulse" />
+            {activeModel}
+          </span>
+        </div>
+        <div className="h-3 w-px bg-[#1B2D52]" />
+        <div className="flex items-center gap-2 text-[#8FA6C8]">
+          <span className="text-[#647A9B]">LINK:</span>
+          <span className="text-[#45E6B0] font-semibold">mTLS (14ms)</span>
+        </div>
+      </div>
+
+      {/* Right: Technical Controls, Clock & Profile */}
       <div className="flex items-center gap-3">
-        {/* Model Indicator */}
-        <div
-          onClick={() => onNavigate('21-settings')}
-          className="hidden md:flex items-center gap-2 bg-[#1a1a25] border border-[#2a2a3a] hover:border-[#3a3a4a] rounded-lg px-2.5 py-1 text-xs cursor-pointer transition"
-        >
-          <span className="text-[#6b6b80]">AI:</span>
-          <span className="font-mono text-[#818cf8] font-medium">{activeModel}</span>
+        {/* Monospace Live System Clock */}
+        <div className="hidden sm:flex items-center gap-1.5 bg-[#050B18] border border-[#1B2D52] px-2.5 py-1 rounded-md text-[11px] font-mono text-[#52E5FF]">
+          <Activity className="h-3 w-3 text-[#52E5FF] animate-pulse" />
+          <span>{currentTime || '00:00:00'}</span>
+          <span className="text-[9px] text-[#647A9B]">UTC</span>
         </div>
 
-        {/* Ollama Health Pill */}
-        <div className="flex items-center gap-1.5 rounded-full bg-[#1a1a25] border border-[#2a2a3a] px-2.5 py-1 text-[11px]">
-          <span className={`h-2 w-2 rounded-full ${ollamaConnected ? 'bg-[#22c55e] animate-pulse' : 'bg-[#ef4444]'}`} />
-          <span className="text-[#9494a8]">Ollama:</span>
-          <span className={ollamaConnected ? 'text-[#22c55e] font-semibold' : 'text-[#ef4444] font-semibold'}>
-            {ollamaConnected ? 'Active' : 'Offline'}
+        {/* Ollama Engine Health Status Pill */}
+        <div className="flex items-center gap-1.5 rounded-md bg-[#111C35] border border-[#1B2D52] px-2.5 py-1 text-[11px] font-mono">
+          <span className={`h-2 w-2 rounded-full ${ollamaConnected ? 'bg-[#45E6B0] shadow-[0_0_6px_#45E6B0]' : 'bg-[#FF647C]'}`} />
+          <span className="text-[#8FA6C8]">LLM:</span>
+          <span className={ollamaConnected ? 'text-[#45E6B0] font-bold' : 'text-[#FF647C] font-bold'}>
+            {ollamaConnected ? 'ACTIVE' : 'OFFLINE'}
           </span>
         </div>
 
-        {/* Floating Desktop Widget Trigger */}
+        {/* Floating Mini Overlay Widget Trigger */}
         <button
           onClick={onOpenOverlay}
           title="Launch Floating Desktop Quick Overlay (Screen 31)"
-          className="hidden lg:flex items-center gap-1.5 rounded-lg bg-[#1a1a25] hover:bg-[#22222f] border border-[#2a2a3a] px-2.5 py-1 text-xs text-[#9494a8] hover:text-white transition cursor-pointer"
+          className="hidden md:flex items-center gap-1.5 rounded-md bg-[#111C35] hover:bg-[#172544] border border-[#1B2D52] hover:border-[#52E5FF]/40 px-2.5 py-1 text-xs text-[#8FA6C8] hover:text-[#52E5FF] transition cursor-pointer"
         >
-          <span>🪟</span>
-          <span className="text-[11px] font-medium">Mini Widget</span>
+          <Layers className="h-3.5 w-3.5" />
+          <span className="text-[11px] font-mono">HUD</span>
         </button>
 
-        {/* Notifications Icon with Badge */}
+        {/* Notifications Icon with Cyan/Red Glow Badge */}
         <button
           onClick={() => onNavigate('20-notifications')}
-          className="relative rounded-lg bg-[#1a1a25] hover:bg-[#22222f] border border-[#2a2a3a] p-2 text-xs text-[#9494a8] hover:text-white transition cursor-pointer"
+          className="relative rounded-md bg-[#111C35] hover:bg-[#172544] border border-[#1B2D52] hover:border-[#52E5FF]/40 p-2 text-xs text-[#8FA6C8] hover:text-[#52E5FF] transition cursor-pointer"
         >
-          <span>🔔</span>
+          <Bell className="h-4 w-4" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 rounded-full bg-[#ef4444] text-[9px] font-bold text-white flex items-center justify-center border border-[#12121a]">
+            <span className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 rounded-full bg-[#FF647C] text-[9px] font-mono font-bold text-white flex items-center justify-center border border-[#050B18] shadow-[0_0_8px_#FF647C]">
               {unreadCount}
             </span>
           )}
         </button>
 
-        {/* Profile Avatar / Menu */}
+        {/* Profile Avatar / Operator Node */}
         <button
           onClick={() => onNavigate('30-profile-menu')}
-          className="h-8 w-8 rounded-full bg-gradient-to-tr from-[#6366f1] to-[#ec4899] flex items-center justify-center font-bold text-xs text-white ring-2 ring-[#6366f1]/30 hover:ring-[#6366f1] transition cursor-pointer"
+          className="h-8 w-8 rounded-lg bg-gradient-to-tr from-[#398BFF] via-[#52E5FF] to-[#9B7CFF] flex items-center justify-center font-mono font-bold text-xs text-[#050B18] ring-2 ring-[#52E5FF]/40 hover:ring-[#52E5FF] transition cursor-pointer shadow-[0_0_10px_rgba(82,229,255,0.3)]"
         >
-          A
+          NX
         </button>
       </div>
     </header>
