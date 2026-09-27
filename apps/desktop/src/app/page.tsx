@@ -1,751 +1,593 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from "react";
+import { ScreenId, CoreState, NexusModule, TaskItem, AutomationWorkflow } from "@/types/nexus";
+import { AppSidebar } from "@/components/AppSidebar";
+import { GlobalHeader } from "@/components/GlobalHeader";
+import { INITIAL_MODULES, INITIAL_TASKS, INITIAL_AUTOMATIONS } from "@/data/mockData";
 
-// --- API Models & Interfaces ---
-interface Project {
-  id: string;
-  name: string;
-  path: string;
-  description: string;
-  status: string;
-  language?: string | null;
-  framework?: string | null;
-  task_count: number;
-  created_at: string;
-}
+// Screens
+import { Screen01Home } from "@/screens/Screen01Home";
+import { Screen02Command } from "@/screens/Screen02Command";
+import { Screen04Modules } from "@/screens/Screen04Modules";
+import { Screen05ModuleDetail } from "@/screens/Screen05ModuleDetail";
+import { Screen06Tasks } from "@/screens/Screen06Tasks";
+import { Screen07TaskDetail } from "@/screens/Screen07TaskDetail";
+import { Screen08Automations } from "@/screens/Screen08Automations";
+import { Screen09AutomationBuilder } from "@/screens/Screen09AutomationBuilder";
+import { Screen10AutomationRun } from "@/screens/Screen10AutomationRun";
+import { Screen11LiveActivity } from "@/screens/Screen11LiveActivity";
+import { Screen12NexusTrace } from "@/screens/Screen12NexusTrace";
+import { Screen13Files } from "@/screens/Screen13Files";
+import { Screen14FileSearch } from "@/screens/Screen14FileSearch";
+import { Screen15Apps } from "@/screens/Screen15Apps";
+import { Screen16SystemControl } from "@/screens/Screen16SystemControl";
+import { Screen17Memory } from "@/screens/Screen17Memory";
+import { Screen18MemoryDetail } from "@/screens/Screen18MemoryDetail";
+import { Screen19Insights } from "@/screens/Screen19Insights";
+import { Screen20Notifications } from "@/screens/Screen20Notifications";
+import { Screen21Settings } from "@/screens/Screen21Settings";
+import { Screen22Integrations } from "@/screens/Screen22Integrations";
+import { Screen25ErrorRecovery } from "@/screens/Screen25ErrorRecovery";
+import { Screen26SuccessState } from "@/screens/Screen26SuccessState";
+import { Screen27EmptyStates } from "@/screens/Screen27EmptyStates";
+import { Screen28Onboarding } from "@/screens/Screen28Onboarding";
+import { Screen33FirstRun } from "@/screens/Screen33FirstRun";
+import { Screen34CompactResponsive } from "@/screens/Screen34CompactResponsive";
 
-interface TaskItem {
-  id: string;
-  project_id: string;
-  goal: string;
-  status: string;
-  model?: string | null;
-  summary?: string | null;
-  error?: string | null;
-  step_count: number;
-  created_at: string;
-}
+// Modals & Overlays
+import { CommandPaletteModal } from "@/components/CommandPaletteModal";
+import { GlobalSearchModal } from "@/components/GlobalSearchModal";
+import { PermissionModal } from "@/components/PermissionModal";
+import { AiConfirmationModal } from "@/components/AiConfirmationModal";
+import { ProfileMenuModal } from "@/components/ProfileMenuModal";
+import { DesktopOverlayWidget } from "@/components/DesktopOverlayWidget";
+import { DesktopNotificationToast } from "@/components/DesktopNotificationToast";
 
-interface ModelItem {
-  name: string;
-  size_bytes: number;
-  family: string;
-  parameter_size: string;
-}
+// Icons for Switcher
+import { Layers, ChevronDown } from "lucide-react";
 
-interface ApprovalItem {
-  id: string;
-  task_id: string;
-  agent_type: string;
-  tool_name: string;
-  risk_level: string;
-  description: string;
-  status: string;
-}
+export default function NexusApp() {
+  const [activeScreen, setActiveScreen] = useState<ScreenId>("01-home");
+  const [coreState, setCoreState] = useState<CoreState>("idle");
+  const [activeModel, setActiveModel] = useState<string>("qwen2.5-coder:7b");
+  const [selectedModule, setSelectedModule] = useState<NexusModule>(INITIAL_MODULES[0]);
+  const [selectedTask, setSelectedTask] = useState<TaskItem>(INITIAL_TASKS[0]);
+  const [selectedWorkflow, setSelectedWorkflow] = useState<AutomationWorkflow>(INITIAL_AUTOMATIONS[0]);
 
-interface ActivityEvent {
-  id: string;
-  timestamp: string;
-  agent?: string;
-  type: string;
-  text: string;
-  tool?: string;
-  isError?: boolean;
-}
+  // Modals & Overlays state
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
+  const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
+  const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isDesktopOverlayVisible, setIsDesktopOverlayVisible] = useState(false);
+  const [isToastNotificationVisible, setIsToastNotificationVisible] = useState(true);
 
-const API_BASE = 'http://127.0.0.1:8000/api/v1';
+  // Permission / Confirmation payload state
+  const [permissionPayload, setPermissionPayload] = useState({ appName: "Visual Studio Code", reason: "Required to continue your requested development workflow." });
+  const [confirmationPayload, setConfirmationPayload] = useState({ workflowName: "Development & Test Automation Workflow", steps: ["Open Visual Studio Code", "Modify selected files", "Run test suite", "Commit changes"] });
 
-export default function NexusDashboard() {
-  // --- State ---
-  const [backendAlive, setBackendAlive] = useState(false);
-  const [ollamaConnected, setOllamaConnected] = useState(false);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [models, setModels] = useState<ModelItem[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>('qwen2.5-coder:14b');
-  const [tasks, setTasks] = useState<TaskItem[]>([]);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [approvals, setApprovals] = useState<ApprovalItem[]>([]);
-  
-  // New Project Form Modal
-  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
-  const [newProjectName, setNewProjectName] = useState('');
-  const [newProjectPath, setNewProjectPath] = useState('');
-  const [projectError, setProjectError] = useState('');
+  // Quick Screen Switcher Bar visibility
+  const [showScreenSwitcher, setShowScreenSwitcher] = useState(true);
 
-  // Task Input
-  const [taskGoal, setTaskGoal] = useState('');
-  const [isSubmittingTask, setIsSubmittingTask] = useState(false);
-
-  // Active Task Stream & Output Tabs
-  const [activityFeed, setActivityFeed] = useState<ActivityEvent[]>([]);
-  const [activeTab, setActiveTab] = useState<'diff' | 'tests' | 'security' | 'summary'>('diff');
-  const [diffContent, setDiffContent] = useState<string>('');
-  const [testOutput, setTestOutput] = useState<string>('');
-  const [securityOutput, setSecurityOutput] = useState<string>('');
-  const [summaryOutput, setSummaryOutput] = useState<string>('');
-
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const feedEndRef = useRef<HTMLDivElement>(null);
-
-  // --- Initial System Health & Data Fetch ---
-  const fetchHealth = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/health`);
-      if (res.ok) {
-        const data = await res.json();
-        setBackendAlive(true);
-        setOllamaConnected(data.ollama_status === 'connected');
-      } else {
-        setBackendAlive(false);
-      }
-    } catch {
-      setBackendAlive(false);
-    }
-  };
-
-  const fetchProjects = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/projects`);
-      if (res.ok) {
-        const data = await res.json();
-        setProjects(data.projects || []);
-        if (data.projects?.length > 0 && !selectedProjectId) {
-          setSelectedProjectId(data.projects[0].id);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load projects', e);
-    }
-  };
-
-  const fetchModels = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/models`);
-      if (res.ok) {
-        const data = await res.json();
-        setModels(data.models || []);
-        if (data.default_model) setSelectedModel(data.default_model);
-      }
-    } catch (e) {
-      console.error('Failed to load models', e);
-    }
-  };
-
-  const fetchTasks = async (projId: string) => {
-    try {
-      const res = await fetch(`${API_BASE}/projects/${projId}/tasks`);
-      if (res.ok) {
-        const data = await res.json();
-        setTasks(data.tasks || []);
-        if (data.tasks?.length > 0 && !selectedTaskId) {
-          selectTask(data.tasks[0]);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load tasks', e);
-    }
-  };
-
-  const fetchApprovals = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/approvals`);
-      if (res.ok) {
-        const data = await res.json();
-        setApprovals(data.approvals || []);
-      }
-    } catch (e) {
-      console.error('Failed to load approvals', e);
-    }
-  };
-
+  // Global Keyboard Shortcuts (Ctrl+K, Ctrl+F, Esc)
   useEffect(() => {
-    fetchHealth();
-    fetchProjects();
-    fetchModels();
-    fetchApprovals();
-
-    const interval = setInterval(() => {
-      fetchHealth();
-      fetchApprovals();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    if (selectedProjectId) {
-      fetchTasks(selectedProjectId);
-    }
-  }, [selectedProjectId]);
-
-  useEffect(() => {
-    feedEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activityFeed]);
-
-  // --- Task Selection & Event Streaming ---
-  const selectTask = async (task: TaskItem) => {
-    setSelectedTaskId(task.id);
-    setActivityFeed([
-      {
-        id: 'init-1',
-        timestamp: new Date().toLocaleTimeString(),
-        type: 'task.selected',
-        text: `Selected Task: "${task.goal}" [Status: ${task.status}]`,
-      },
-    ]);
-    setSummaryOutput(task.summary || 'Summary will appear when task is complete.');
-
-    // Disconnect old SSE
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
-
-    // Connect SSE stream for live updates
-    const es = new EventSource(`${API_BASE}/stream/events/tasks/${task.id}`);
-    eventSourceRef.current = es;
-
-    es.onmessage = (event) => {
-      try {
-        const envelope = JSON.parse(event.data);
-        const payload = envelope.payload || {};
-        const type = envelope.event_type;
-
-        let feedItem: ActivityEvent | null = null;
-
-        if (type === 'agent.thought') {
-          feedItem = {
-            id: envelope.event_id,
-            timestamp: new Date().toLocaleTimeString(),
-            agent: envelope.agent_id,
-            type: 'Thought',
-            text: payload.thought || '',
-          };
-        } else if (type === 'tool.invoked') {
-          feedItem = {
-            id: envelope.event_id,
-            timestamp: new Date().toLocaleTimeString(),
-            agent: envelope.agent_id,
-            type: 'Tool Call',
-            tool: payload.tool,
-            text: `Invoking tool: ${payload.tool} with parameters: ${JSON.stringify(payload.params || {})}`,
-          };
-        } else if (type === 'tool.completed') {
-          feedItem = {
-            id: envelope.event_id,
-            timestamp: new Date().toLocaleTimeString(),
-            agent: envelope.agent_id,
-            type: 'Tool Result',
-            tool: payload.tool,
-            text: `Tool ${payload.tool} completed in ${payload.duration_ms}ms`,
-          };
-        } else if (type === 'tool.error') {
-          feedItem = {
-            id: envelope.event_id,
-            timestamp: new Date().toLocaleTimeString(),
-            agent: envelope.agent_id,
-            type: 'Tool Error',
-            tool: payload.tool,
-            isError: true,
-            text: `Tool error: ${payload.error}`,
-          };
-        } else if (type === 'task.completed') {
-          feedItem = {
-            id: envelope.event_id,
-            timestamp: new Date().toLocaleTimeString(),
-            type: 'Success',
-            text: '🎉 Task completed all pipeline stages successfully!',
-          };
-          if (selectedProjectId) fetchTasks(selectedProjectId);
-        }
-
-        if (feedItem) {
-          setActivityFeed((prev) => [...prev, feedItem!]);
-        }
-      } catch (err) {
-        console.error('Failed to parse SSE event', err);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        setIsGlobalSearchOpen((prev) => !prev);
+      } else if (e.key === "Escape") {
+        setIsCommandPaletteOpen(false);
+        setIsGlobalSearchOpen(false);
+        setIsPermissionModalOpen(false);
+        setIsConfirmationModalOpen(false);
+        setIsProfileMenuOpen(false);
       }
     };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const handleNavigate = (screen: ScreenId) => {
+    setActiveScreen(screen);
+    // Auto-close overlays
+    setIsCommandPaletteOpen(false);
+    setIsGlobalSearchOpen(false);
+    setIsPermissionModalOpen(false);
+    setIsConfirmationModalOpen(false);
+    setIsProfileMenuOpen(false);
   };
 
-  // --- Handlers ---
-  const handleCreateProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setProjectError('');
-    try {
-      const res = await fetch(`${API_BASE}/projects`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newProjectName,
-          path: newProjectPath,
-        }),
-      });
-      if (res.ok) {
-        const created = await res.json();
-        setProjects((prev) => [created, ...prev]);
-        setSelectedProjectId(created.id);
-        setShowNewProjectModal(false);
-        setNewProjectName('');
-        setNewProjectPath('');
-      } else {
-        const err = await res.json();
-        setProjectError(err.message || 'Failed to create project');
-      }
-    } catch {
-      setProjectError('Could not connect to backend.');
+  const handleRequestPermission = (appName: string, reason: string) => {
+    setPermissionPayload({ appName, reason });
+    setIsPermissionModalOpen(true);
+  };
+
+  const handleRequestAiConfirmation = (workflowName: string, steps: string[]) => {
+    setConfirmationPayload({ workflowName, steps });
+    setIsConfirmationModalOpen(true);
+  };
+
+  // Prototype Flow Triggers
+  const triggerFlow = (flowIndex: number) => {
+    switch (flowIndex) {
+      case 1:
+        // Onboarding -> Home -> Command -> Task Execution -> Trace -> Success -> Activity
+        setActiveScreen("28-onboarding");
+        break;
+      case 2:
+        // Home -> Automations -> Builder -> Permission -> Run -> Result
+        setActiveScreen("09-automation-builder");
+        break;
+      case 3:
+        // Home -> Command Palette -> File Search -> Result
+        setIsCommandPaletteOpen(true);
+        break;
+      case 4:
+        // Home -> AI Modules -> Module Detail -> Permissions
+        setActiveScreen("04-modules");
+        break;
+      default:
+        setActiveScreen("01-home");
     }
   };
 
-  const handleCreateTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedProjectId || !taskGoal.trim()) return;
+  const allScreens: { id: ScreenId; title: string; num: string }[] = [
+    { id: "01-home", title: "Home / Command Center", num: "01" },
+    { id: "02-command", title: "NEXUS Command", num: "02" },
+    { id: "03-palette", title: "Command Palette (Ctrl+K)", num: "03" },
+    { id: "04-modules", title: "AI Modules Network", num: "04" },
+    { id: "05-module-detail", title: "Module Detail Workspace", num: "05" },
+    { id: "06-tasks", title: "AI Tasks Management", num: "06" },
+    { id: "07-task-detail", title: "Task Execution Workspace", num: "07" },
+    { id: "08-automations", title: "Automations Hub", num: "08" },
+    { id: "09-automation-builder", title: "Visual Workflow Builder", num: "09" },
+    { id: "10-automation-run", title: "Automation Run Audit", num: "10" },
+    { id: "11-activity", title: "Live Activity Center", num: "11" },
+    { id: "12-trace", title: "NEXUS Trace Transparency", num: "12" },
+    { id: "13-files", title: "AI File Explorer", num: "13" },
+    { id: "14-file-search", title: "Intelligent File Search", num: "14" },
+    { id: "15-apps", title: "App Ecosystem", num: "15" },
+    { id: "16-system", title: "System Awareness & Telemetry", num: "16" },
+    { id: "17-memory", title: "Memory Center", num: "17" },
+    { id: "18-memory-detail", title: "Memory Detail Workspace", num: "18" },
+    { id: "19-insights", title: "Productivity Insights", num: "19" },
+    { id: "20-notifications", title: "Notification Center", num: "20" },
+    { id: "21-settings", title: "Settings Portal", num: "21" },
+    { id: "22-integrations", title: "Integrations Hub", num: "22" },
+    { id: "23-permission-modal", title: "Permission Modal", num: "23" },
+    { id: "24-ai-confirmation", title: "AI Action Confirmation", num: "24" },
+    { id: "25-error-recovery", title: "Error Recovery State", num: "25" },
+    { id: "26-success", title: "Success Completion State", num: "26" },
+    { id: "27-empty-states", title: "Empty States Showcase", num: "27" },
+    { id: "28-onboarding", title: "First-Time Onboarding", num: "28" },
+    { id: "29-global-search", title: "Global Search Overlay", num: "29" },
+    { id: "30-profile-menu", title: "Profile Menu", num: "30" },
+    { id: "31-desktop-overlay", title: "Floating Desktop Overlay", num: "31" },
+    { id: "32-desktop-notifications", title: "Desktop Toast Alert", num: "32" },
+    { id: "33-first-run", title: "First-Run Dashboard", num: "33" },
+    { id: "34-compact", title: "Compact Responsive Fallback", num: "34" },
+  ];
 
-    setIsSubmittingTask(true);
-    try {
-      const res = await fetch(`${API_BASE}/projects/${selectedProjectId}/tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          goal: taskGoal,
-          model: selectedModel,
-        }),
-      });
-
-      if (res.ok) {
-        const task = await res.json();
-        setTasks((prev) => [task, ...prev]);
-        setTaskGoal('');
-        selectTask(task);
-
-        // Run the task immediately in the backend
-        await fetch(`${API_BASE}/projects/${selectedProjectId}/tasks/${task.id}/run`, {
-          method: 'POST',
-        });
-      }
-    } catch (err) {
-      console.error('Failed to submit task', err);
-    } finally {
-      setIsSubmittingTask(false);
-    }
-  };
-
-  const handleResolveApproval = async (approvalId: string, status: 'approved' | 'rejected') => {
-    try {
-      await fetch(`${API_BASE}/approvals/${approvalId}/resolve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: status,
-          reason: `User clicked ${status} in desktop UI`,
-        }),
-      });
-      setApprovals((prev) => prev.filter((a) => a.id !== approvalId));
-    } catch (e) {
-      console.error('Failed to resolve approval', e);
-    }
-  };
-
-  const activeProject = projects.find((p) => p.id === selectedProjectId);
-  const activeTask = tasks.find((t) => t.id === selectedTaskId);
+  const isCompact = activeScreen === "34-compact" || activeScreen === "screen-34-compact-responsive";
+  const isOnboarding = activeScreen === "28-onboarding" || activeScreen === "screen-28-onboarding";
 
   return (
-    <div className="flex h-screen w-screen flex-col bg-[#0a0a0f] text-[#e8e8ed] overflow-hidden select-none font-sans">
-      {/* 1. TOP NAVIGATION BAR */}
-      <header className="flex h-14 items-center justify-between border-b border-[#2a2a3a] bg-[#12121a] px-5 shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-lg bg-gradient-to-tr from-[#6366f1] to-[#a855f7] flex items-center justify-center shadow-lg shadow-[#6366f1]/20">
-              <span className="font-mono font-black text-sm text-white">N</span>
-            </div>
-            <span className="font-mono font-bold tracking-wider text-base bg-gradient-to-r from-white via-slate-200 to-indigo-300 bg-clip-text text-transparent">
-              NEXUS
-            </span>
-            <span className="rounded-full bg-[#1a1a25] border border-[#2a2a3a] px-2 py-0.5 text-[10px] font-mono text-[#818cf8]">
-              MVP v0.1.0
-            </span>
-          </div>
+    <div className="flex h-screen w-screen overflow-hidden bg-[#0a0a0f] text-[#f0f0f5] font-sans antialiased">
+      {/* Primary Sidebar */}
+      {!isCompact && (
+        <AppSidebar
+          currentScreen={activeScreen}
+          onNavigate={handleNavigate}
+          unreadCount={3}
+        />
+      )}
 
-          <div className="h-4 w-[1px] bg-[#2a2a3a]" />
+      {/* Main Execution Viewport */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        {/* Global Top Header Bar */}
+        {!isCompact && !isOnboarding && (
+          <GlobalHeader
+            currentScreen={activeScreen}
+            onNavigate={handleNavigate}
+            onOpenPalette={() => setIsCommandPaletteOpen(true)}
+            onOpenGlobalSearch={() => setIsGlobalSearchOpen(true)}
+            onOpenOverlay={() => setIsDesktopOverlayVisible(true)}
+            unreadCount={3}
+            ollamaConnected={true}
+            activeModel={activeModel}
+          />
+        )}
 
-          {/* Project Switcher */}
-          <div className="flex items-center gap-2">
-            <select
-              value={selectedProjectId || ''}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="bg-[#1a1a25] border border-[#2a2a3a] rounded-md px-3 py-1 text-xs text-[#e8e8ed] focus:border-[#6366f1] outline-none cursor-pointer hover:bg-[#22222f] transition"
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  📁 {p.name}
-                </option>
-              ))}
-              {projects.length === 0 && <option value="">No registered projects</option>}
-            </select>
+        {/* Dynamic Screen Renderer */}
+        <main className="flex-1 flex flex-col min-h-0 overflow-hidden relative bg-[#0a0a0f]">
+          {(activeScreen === "01-home" || activeScreen === "screen-01-home") && (
+            <Screen01Home 
+              onNavigate={handleNavigate} 
+              coreState={coreState}
+              setCoreState={setCoreState}
+              onOpenPalette={() => setIsCommandPaletteOpen(true)}
+            />
+          )}
 
-            <button
-              onClick={() => setShowNewProjectModal(true)}
-              className="flex items-center gap-1 rounded-md bg-[#1a1a25] hover:bg-[#22222f] border border-[#2a2a3a] px-2.5 py-1 text-xs text-[#9494a8] hover:text-white transition"
-            >
-              <span>+ Import</span>
-            </button>
-          </div>
-        </div>
+          {(activeScreen === "02-command" || activeScreen === "screen-02-command") && (
+            <Screen02Command 
+              onNavigate={handleNavigate} 
+              onRequestPermission={handleRequestPermission}
+              onRequestAiConfirmation={handleRequestAiConfirmation}
+            />
+          )}
 
-        {/* Right Status Controls */}
-        <div className="flex items-center gap-4">
-          {/* Model Selector */}
-          <div className="flex items-center gap-2 bg-[#1a1a25] border border-[#2a2a3a] rounded-md px-2.5 py-1 text-xs">
-            <span className="text-[#6b6b80]">Model:</span>
-            <select
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-              className="bg-transparent text-[#818cf8] font-mono text-xs outline-none cursor-pointer"
-            >
-              {models.map((m) => (
-                <option key={m.name} value={m.name} className="bg-[#12121a] text-white">
-                  {m.name}
-                </option>
-              ))}
-              {models.length === 0 && (
-                <option value="qwen2.5-coder:14b" className="bg-[#12121a] text-white">
-                  qwen2.5-coder:14b
-                </option>
-              )}
-            </select>
-          </div>
-
-          {/* Ollama Status Badge */}
-          <div className="flex items-center gap-1.5 rounded-full bg-[#1a1a25] border border-[#2a2a3a] px-2.5 py-1 text-[11px]">
-            <span className={`h-2 w-2 rounded-full ${ollamaConnected ? 'bg-[#22c55e] animate-pulse' : 'bg-[#ef4444]'}`} />
-            <span className="text-[#9494a8]">Ollama:</span>
-            <span className={ollamaConnected ? 'text-[#22c55e]' : 'text-[#ef4444]'}>
-              {ollamaConnected ? 'Ready' : 'Offline'}
-            </span>
-          </div>
-
-          {/* Backend Status Badge */}
-          <div className="flex items-center gap-1.5 rounded-full bg-[#1a1a25] border border-[#2a2a3a] px-2.5 py-1 text-[11px]">
-            <span className={`h-2 w-2 rounded-full ${backendAlive ? 'bg-[#22c55e]' : 'bg-[#ef4444]'}`} />
-            <span className="text-[#9494a8]">Core:</span>
-            <span className={backendAlive ? 'text-[#22c55e]' : 'text-[#ef4444]'}>
-              {backendAlive ? 'Active' : 'Down'}
-            </span>
-          </div>
-        </div>
-      </header>
-
-      {/* 2. MAIN WORKSPACE LAYOUT (3 PANELS) */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* LEFT PANEL: Tasks & Workspace Overview */}
-        <aside className="w-72 border-r border-[#2a2a3a] bg-[#12121a] flex flex-col shrink-0">
-          <div className="p-3 border-b border-[#2a2a3a]">
-            <div className="flex items-center justify-between text-xs font-semibold text-[#9494a8] mb-2">
-              <span>WORKSPACE</span>
-              {activeProject?.language && (
-                <span className="rounded bg-[#1a1a25] border border-[#2a2a3a] px-1.5 py-0.5 text-[10px] text-[#34d399] font-mono">
-                  {activeProject.language}
-                </span>
-              )}
-            </div>
-            <div className="text-xs font-mono text-[#e8e8ed] truncate" title={activeProject?.path || ''}>
-              {activeProject?.path || 'No project selected'}
-            </div>
-          </div>
-
-          <div className="p-3 border-b border-[#2a2a3a] flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#9494a8]">TASK HISTORY ({tasks.length})</span>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-            {tasks.map((t) => {
-              const isSelected = t.id === selectedTaskId;
-              const isCompleted = t.status === 'completed';
-              const isRunning = !['completed', 'failed', 'cancelled', 'created'].includes(t.status);
-
-              return (
-                <div
-                  key={t.id}
-                  onClick={() => selectTask(t)}
-                  className={`p-2.5 rounded-lg border cursor-pointer transition flex flex-col gap-1.5 ${
-                    isSelected
-                      ? 'bg-[#1a1a25] border-[#6366f1] shadow-md shadow-[#6366f1]/10'
-                      : 'bg-[#12121a] border-[#2a2a3a] hover:bg-[#1a1a25] hover:border-[#3a3a4a]'
-                  }`}
+          {(activeScreen === "03-palette" || activeScreen === "screen-03-command-palette") && (
+            <div className="flex-1 p-8 flex items-center justify-center">
+              <div className="text-center space-y-3">
+                <p className="text-[#9494a8] text-sm">Command Palette is currently open as a modal overlay.</p>
+                <button 
+                  onClick={() => setIsCommandPaletteOpen(true)}
+                  className="px-4 py-2 bg-[#6366f1] text-white text-xs font-semibold rounded-xl cursor-pointer"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-[10px] text-[#6b6b80]">{t.id}</span>
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-[9px] font-mono uppercase font-bold ${
-                        isCompleted
-                          ? 'bg-[#22c55e]/10 text-[#22c55e] border border-[#22c55e]/20'
-                          : isRunning
-                          ? 'bg-[#6366f1]/10 text-[#818cf8] border border-[#6366f1]/20 animate-pulse'
-                          : 'bg-[#2a2a3a] text-[#9494a8]'
-                      }`}
-                    >
-                      {t.status}
-                    </span>
-                  </div>
-                  <p className="text-xs text-[#e8e8ed] font-medium line-clamp-2">{t.goal}</p>
-                </div>
-              );
-            })}
-
-            {tasks.length === 0 && (
-              <div className="text-center py-10 text-[#6b6b80] text-xs">
-                No tasks yet. Create one below to start the agent pipeline.
-              </div>
-            )}
-          </div>
-        </aside>
-
-        {/* CENTER PANEL: Task Studio, Live Stepper & Timeline */}
-        <main className="flex-1 flex flex-col bg-[#0a0a0f] overflow-hidden border-r border-[#2a2a3a]">
-          {/* Active Approval Alert Banner (Human-in-the-Loop) */}
-          {approvals.length > 0 && (
-            <div className="bg-[#ef4444]/10 border-b border-[#ef4444]/30 p-3.5 flex items-center justify-between animate-pulse">
-              <div className="flex items-center gap-3">
-                <span className="text-lg">⚠️</span>
-                <div>
-                  <div className="text-xs font-bold text-[#ef4444] uppercase tracking-wider">
-                    Approval Required — High Risk Action
-                  </div>
-                  <div className="text-xs text-[#e8e8ed]">
-                    {approvals[0].description} ({approvals[0].tool_name})
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleResolveApproval(approvals[0].id, 'rejected')}
-                  className="rounded-md bg-[#22222f] hover:bg-[#2a2a3a] border border-[#2a2a3a] px-3 py-1.5 text-xs text-[#e8e8ed] transition"
-                >
-                  Reject
-                </button>
-                <button
-                  onClick={() => handleResolveApproval(approvals[0].id, 'approved')}
-                  className="rounded-md bg-[#ef4444] hover:bg-[#dc2626] text-white px-3 py-1.5 text-xs font-semibold shadow-lg shadow-[#ef4444]/20 transition"
-                >
-                  Approve Execution
+                  Open Ctrl+K Palette
                 </button>
               </div>
             </div>
           )}
 
-          {/* Stepper / Agent Pipeline Status */}
-          <div className="border-b border-[#2a2a3a] bg-[#12121a] px-5 py-3 shrink-0">
-            <div className="flex items-center justify-between">
-              {[
-                { label: '1. Plan', agent: 'planner', color: '#818cf8' },
-                { label: '2. Develop', agent: 'developer', color: '#34d399' },
-                { label: '3. Test & Debug', agent: 'tester', color: '#fbbf24' },
-                { label: '4. Security Audit', agent: 'security', color: '#f472b6' },
-                { label: '5. Lead Review', agent: 'reviewer', color: '#60a5fa' },
-              ].map((step, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className="h-2 w-2 rounded-full"
-                      style={{ backgroundColor: step.color }}
-                    />
-                    <span className="text-xs font-medium text-[#9494a8]">{step.label}</span>
-                  </div>
-                  {idx < 4 && <div className="h-[1px] w-8 bg-[#2a2a3a]" />}
-                </div>
-              ))}
-            </div>
-          </div>
+          {(activeScreen === "04-modules" || activeScreen === "screen-04-modules") && (
+            <Screen04Modules 
+              onNavigate={handleNavigate} 
+              onSelectModule={(mod) => {
+                setSelectedModule(mod);
+                setActiveScreen("05-module-detail");
+              }} 
+            />
+          )}
 
-          {/* Live Activity Timeline */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono text-xs">
-            {activityFeed.map((item) => (
-              <div
-                key={item.id}
-                className={`p-3 rounded-lg border ${
-                  item.isError
-                    ? 'bg-[#ef4444]/10 border-[#ef4444]/30 text-[#ef4444]'
-                    : item.type === 'Tool Call'
-                    ? 'bg-[#1a1a25] border-[#34d399]/30 text-[#34d399]'
-                    : item.type === 'Tool Result'
-                    ? 'bg-[#12121a] border-[#2a2a3a] text-[#9494a8]'
-                    : 'bg-[#12121a] border-[#2a2a3a] text-[#e8e8ed]'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1.5 text-[10px] text-[#6b6b80]">
-                  <span className="font-bold uppercase tracking-wider text-[#818cf8]">
-                    {item.agent ? `[${item.agent.toUpperCase()}]` : '[SYSTEM]'} {item.type}
-                  </span>
-                  <span>{item.timestamp}</span>
-                </div>
-                <div className="whitespace-pre-wrap leading-relaxed font-sans">{item.text}</div>
+          {(activeScreen === "05-module-detail" || activeScreen === "screen-05-module-detail") && (
+            <Screen05ModuleDetail 
+              module={selectedModule} 
+              onNavigate={handleNavigate} 
+            />
+          )}
+
+          {(activeScreen === "06-tasks" || activeScreen === "screen-06-tasks") && (
+            <Screen06Tasks 
+              onNavigate={handleNavigate} 
+              onSelectTask={(task) => {
+                setSelectedTask(task);
+                setActiveScreen("07-task-detail");
+              }}
+            />
+          )}
+
+          {(activeScreen === "07-task-detail" || activeScreen === "screen-07-task-detail") && (
+            <Screen07TaskDetail onNavigate={handleNavigate} />
+          )}
+
+          {(activeScreen === "08-automations" || activeScreen === "screen-08-automations") && (
+            <Screen08Automations 
+              onNavigate={handleNavigate} 
+              onSelectAutomation={(wf) => {
+                setSelectedWorkflow(wf);
+                setActiveScreen("09-automation-builder");
+              }}
+            />
+          )}
+
+          {(activeScreen === "09-automation-builder" || activeScreen === "screen-09-automation-builder") && (
+            <Screen09AutomationBuilder 
+              workflow={selectedWorkflow}
+              onNavigate={handleNavigate} 
+              onRequestPermission={handleRequestPermission}
+            />
+          )}
+
+          {(activeScreen === "10-automation-run" || activeScreen === "screen-10-automation-run") && (
+            <Screen10AutomationRun onNavigate={handleNavigate} />
+          )}
+
+          {(activeScreen === "11-activity" || activeScreen === "screen-11-activity") && (
+            <Screen11LiveActivity onNavigate={handleNavigate} />
+          )}
+
+          {(activeScreen === "12-trace" || activeScreen === "screen-12-trace") && (
+            <Screen12NexusTrace onNavigate={handleNavigate} />
+          )}
+
+          {(activeScreen === "13-files" || activeScreen === "screen-13-files") && (
+            <Screen13Files onNavigate={handleNavigate} />
+          )}
+
+          {(activeScreen === "14-file-search" || activeScreen === "screen-14-file-search") && (
+            <Screen14FileSearch onNavigate={handleNavigate} />
+          )}
+
+          {(activeScreen === "15-apps" || activeScreen === "screen-15-apps") && (
+            <Screen15Apps 
+              onNavigate={handleNavigate} 
+              onRequestPermission={handleRequestPermission}
+            />
+          )}
+
+          {(activeScreen === "16-system" || activeScreen === "screen-16-system") && (
+            <Screen16SystemControl onNavigate={handleNavigate} />
+          )}
+
+          {(activeScreen === "17-memory" || activeScreen === "screen-17-memory") && (
+            <Screen17Memory 
+              onNavigate={handleNavigate} 
+              onSelectMemory={() => setActiveScreen("18-memory-detail")} 
+            />
+          )}
+
+          {(activeScreen === "18-memory-detail" || activeScreen === "screen-18-memory-detail") && (
+            <Screen18MemoryDetail onNavigate={handleNavigate} />
+          )}
+
+          {(activeScreen === "19-insights" || activeScreen === "screen-19-insights") && (
+            <Screen19Insights onNavigate={handleNavigate} />
+          )}
+
+          {(activeScreen === "20-notifications" || activeScreen === "screen-20-notifications") && (
+            <Screen20Notifications 
+              onNavigate={handleNavigate} 
+              onRequestPermission={handleRequestPermission}
+            />
+          )}
+
+          {(activeScreen === "21-settings" || activeScreen === "screen-21-settings") && (
+            <Screen21Settings 
+              onNavigate={handleNavigate} 
+              activeModel={activeModel}
+              setActiveModel={setActiveModel}
+            />
+          )}
+
+          {(activeScreen === "22-integrations" || activeScreen === "screen-22-integrations") && (
+            <Screen22Integrations 
+              onNavigate={handleNavigate} 
+              onRequestPermission={handleRequestPermission}
+            />
+          )}
+
+          {(activeScreen === "23-permission-modal" || activeScreen === "screen-23-permission-modal") && (
+            <div className="flex-1 p-8 flex items-center justify-center">
+              <div className="text-center space-y-3">
+                <p className="text-[#9494a8] text-sm">Permission Modal view mode active.</p>
+                <button 
+                  onClick={() => setIsPermissionModalOpen(true)}
+                  className="px-4 py-2 bg-[#6366f1] text-white text-xs font-semibold rounded-xl cursor-pointer"
+                >
+                  Trigger Security Permission Modal
+                </button>
               </div>
-            ))}
-            <div ref={feedEndRef} />
-          </div>
+            </div>
+          )}
 
-          {/* Natural Language Task Input Bar */}
-          <div className="p-4 border-t border-[#2a2a3a] bg-[#12121a] shrink-0">
-            <form onSubmit={handleCreateTask} className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Instruct NEXUS: e.g. 'Implement a rate limiter in src/nexus/core/limiter.py and add pytest tests'"
-                value={taskGoal}
-                onChange={(e) => setTaskGoal(e.target.value)}
-                disabled={isSubmittingTask}
-                className="flex-1 bg-[#1a1a25] border border-[#2a2a3a] rounded-lg px-4 py-2.5 text-xs text-white placeholder-[#6b6b80] focus:border-[#6366f1] outline-none transition"
-              />
-              <button
-                type="submit"
-                disabled={isSubmittingTask || !taskGoal.trim()}
-                className="bg-gradient-to-r from-[#6366f1] to-[#818cf8] hover:opacity-90 disabled:opacity-50 text-white font-medium px-5 py-2.5 rounded-lg text-xs flex items-center gap-2 shadow-lg shadow-[#6366f1]/25 transition cursor-pointer"
-              >
-                {isSubmittingTask ? 'Launching...' : 'Run Agents ⚡'}
-              </button>
-            </form>
-          </div>
+          {(activeScreen === "24-ai-confirmation" || activeScreen === "screen-24-ai-confirmation") && (
+            <div className="flex-1 p-8 flex items-center justify-center">
+              <div className="text-center space-y-3">
+                <p className="text-[#9494a8] text-sm">AI Confirmation Modal view mode active.</p>
+                <button 
+                  onClick={() => setIsConfirmationModalOpen(true)}
+                  className="px-4 py-2 bg-[#6366f1] text-white text-xs font-semibold rounded-xl cursor-pointer"
+                >
+                  Trigger AI Approval Dialog
+                </button>
+              </div>
+            </div>
+          )}
+
+          {(activeScreen === "25-error-recovery" || activeScreen === "screen-25-error-recovery") && (
+            <Screen25ErrorRecovery onNavigate={handleNavigate} />
+          )}
+
+          {(activeScreen === "26-success" || activeScreen === "screen-26-success-state") && (
+            <Screen26SuccessState onNavigate={handleNavigate} />
+          )}
+
+          {(activeScreen === "27-empty-states" || activeScreen === "screen-27-empty-states") && (
+            <Screen27EmptyStates onNavigate={handleNavigate} />
+          )}
+
+          {(activeScreen === "28-onboarding" || activeScreen === "screen-28-onboarding") && (
+            <Screen28Onboarding onNavigate={handleNavigate} />
+          )}
+
+          {(activeScreen === "29-global-search" || activeScreen === "screen-29-global-search") && (
+            <div className="flex-1 p-8 flex items-center justify-center">
+              <div className="text-center space-y-3">
+                <p className="text-[#9494a8] text-sm">Universal Global Search overlay active.</p>
+                <button 
+                  onClick={() => setIsGlobalSearchOpen(true)}
+                  className="px-4 py-2 bg-[#6366f1] text-white text-xs font-semibold rounded-xl cursor-pointer"
+                >
+                  Open Global Search
+                </button>
+              </div>
+            </div>
+          )}
+
+          {(activeScreen === "30-profile-menu" || activeScreen === "screen-30-profile-menu") && (
+            <div className="flex-1 p-8 flex items-center justify-center">
+              <div className="text-center space-y-3">
+                <p className="text-[#9494a8] text-sm">User Profile &amp; Plan Menu modal.</p>
+                <button 
+                  onClick={() => setIsProfileMenuOpen(true)}
+                  className="px-4 py-2 bg-[#6366f1] text-white text-xs font-semibold rounded-xl cursor-pointer"
+                >
+                  Open Profile Menu
+                </button>
+              </div>
+            </div>
+          )}
+
+          {(activeScreen === "31-desktop-overlay" || activeScreen === "screen-31-desktop-overlay") && (
+            <div className="flex-1 p-8 flex items-center justify-center relative">
+              <div className="text-center space-y-3">
+                <p className="text-[#9494a8] text-sm">Desktop Quick Floating Overlay Widget is active in the bottom right corner.</p>
+                <button 
+                  onClick={() => setIsDesktopOverlayVisible(!isDesktopOverlayVisible)}
+                  className="px-4 py-2 bg-[#6366f1] text-white text-xs font-semibold rounded-xl cursor-pointer"
+                >
+                  Toggle Floating Widget
+                </button>
+              </div>
+            </div>
+          )}
+
+          {(activeScreen === "32-desktop-notifications" || activeScreen === "screen-32-desktop-notification") && (
+            <div className="flex-1 p-8 flex items-center justify-center">
+              <div className="text-center space-y-3">
+                <p className="text-[#9494a8] text-sm">Desktop Toast Notification active in the top right corner.</p>
+                <button 
+                  onClick={() => setIsToastNotificationVisible(true)}
+                  className="px-4 py-2 bg-[#6366f1] text-white text-xs font-semibold rounded-xl cursor-pointer"
+                >
+                  Re-fire Toast Notification
+                </button>
+              </div>
+            </div>
+          )}
+
+          {(activeScreen === "33-first-run" || activeScreen === "screen-33-first-run") && (
+            <Screen33FirstRun onNavigate={handleNavigate} />
+          )}
+
+          {(activeScreen === "34-compact" || activeScreen === "screen-34-compact-responsive") && (
+            <Screen34CompactResponsive onNavigate={handleNavigate} />
+          )}
         </main>
 
-        {/* RIGHT PANEL: Output Inspector (Diffs, Tests, Security, Review) */}
-        <aside className="w-96 bg-[#12121a] flex flex-col shrink-0">
-          {/* Tabs Header */}
-          <div className="flex border-b border-[#2a2a3a] bg-[#0a0a0f] text-xs">
-            {[
-              { key: 'diff', label: 'Code Diffs' },
-              { key: 'tests', label: 'Test Results' },
-              { key: 'security', label: 'Security' },
-              { key: 'summary', label: 'Review' },
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key as any)}
-                className={`flex-1 py-3 font-medium transition text-center border-b-2 ${
-                  activeTab === tab.key
-                    ? 'border-[#6366f1] text-[#e8e8ed] bg-[#12121a]'
-                    : 'border-transparent text-[#6b6b80] hover:text-[#9494a8]'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Tab Content */}
-          <div className="flex-1 p-4 overflow-y-auto font-mono text-xs">
-            {activeTab === 'diff' && (
-              <div className="text-[#9494a8]">
-                {diffContent || (
-                  <div className="text-center py-20 text-[#6b6b80]">
-                    <div className="text-xl mb-2">📄</div>
-                    Code diffs generated during task execution will be rendered here.
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'tests' && (
-              <div className="text-[#9494a8]">
-                {testOutput || (
-                  <div className="text-center py-20 text-[#6b6b80]">
-                    <div className="text-xl mb-2">🧪</div>
-                    Automated test runner output and assertions will appear here.
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'security' && (
-              <div className="text-[#9494a8]">
-                {securityOutput || (
-                  <div className="text-center py-20 text-[#6b6b80]">
-                    <div className="text-xl mb-2">🛡️</div>
-                    OWASP vulnerability scans and secret checks will appear here.
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'summary' && (
-              <div className="text-[#e8e8ed] leading-relaxed font-sans">
-                {summaryOutput ? (
-                  <div className="whitespace-pre-wrap">{summaryOutput}</div>
-                ) : (
-                  <div className="text-center py-20 text-[#6b6b80]">
-                    <div className="text-xl mb-2">📝</div>
-                    The Reviewer agent will post the final task changelog here.
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </aside>
-      </div>
-
-      {/* 3. IMPORT PROJECT MODAL */}
-      {showNewProjectModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-[#12121a] border border-[#2a2a3a] rounded-xl w-full max-w-md p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-[#2a2a3a] pb-3">
-              <h3 className="font-bold text-sm text-white">Import Codebase Workspace</h3>
-              <button
-                onClick={() => setShowNewProjectModal(false)}
-                className="text-[#6b6b80] hover:text-white"
-              >
-                ✕
-              </button>
+        {/* Floating Quick Navigation & Prototype Flow Switcher Bar */}
+        {showScreenSwitcher && (
+          <div className="absolute bottom-4 left-6 z-40 flex items-center gap-2 p-1.5 rounded-2xl bg-[#12121a]/90 border border-[#2a2a3a] backdrop-blur-xl shadow-2xl">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono font-bold text-[#818cf8] border-r border-[#2a2a3a]">
+              <Layers className="w-3.5 h-3.5" />
+              <span>NEXUS 34-SCREEN AUDIT</span>
             </div>
 
-            {projectError && (
-              <div className="bg-[#ef4444]/10 border border-[#ef4444]/20 rounded-md p-2.5 text-xs text-[#ef4444]">
-                {projectError}
-              </div>
-            )}
+            {/* Quick Screen Dropdown */}
+            <div className="relative group">
+              <select
+                value={activeScreen}
+                onChange={(e) => handleNavigate(e.target.value as ScreenId)}
+                className="bg-[#1a1a25] border border-[#2a2a3a] text-white text-xs rounded-xl px-3 py-1.5 appearance-none pr-8 cursor-pointer focus:outline-none focus:border-[#6366f1]"
+              >
+                {allScreens.map((s) => (
+                  <option key={s.id} value={s.id} className="bg-[#1a1a25] text-white">
+                    {s.num}. {s.title}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-[#9494a8] absolute right-2.5 top-2.5 pointer-events-none" />
+            </div>
 
-            <form onSubmit={handleCreateProject} className="space-y-3">
-              <div>
-                <label className="block text-xs text-[#9494a8] mb-1">Project Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. My Backend App"
-                  value={newProjectName}
-                  onChange={(e) => setNewProjectName(e.target.value)}
-                  className="w-full bg-[#1a1a25] border border-[#2a2a3a] rounded-md px-3 py-2 text-xs text-white focus:border-[#6366f1] outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-[#9494a8] mb-1">Filesystem Path (Absolute)</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. C:\projects\my-app"
-                  value={newProjectPath}
-                  onChange={(e) => setNewProjectPath(e.target.value)}
-                  className="w-full bg-[#1a1a25] border border-[#2a2a3a] rounded-md px-3 py-2 text-xs text-white font-mono focus:border-[#6366f1] outline-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowNewProjectModal(false)}
-                  className="px-4 py-2 rounded-md bg-[#1a1a25] hover:bg-[#22222f] border border-[#2a2a3a] text-xs text-[#9494a8]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-md bg-[#6366f1] hover:bg-[#818cf8] text-xs font-semibold text-white shadow-lg shadow-[#6366f1]/25"
-                >
-                  Register Workspace
-                </button>
-              </div>
-            </form>
+            {/* Prototype Flows */}
+            <div className="flex items-center gap-1 pl-1 border-l border-[#2a2a3a]">
+              <button
+                onClick={() => triggerFlow(1)}
+                title="Flow 1: Onboarding ➔ Home ➔ Command ➔ Execution ➔ Trace ➔ Success"
+                className="px-2.5 py-1 rounded-lg bg-[#1a1a25] hover:bg-[#22222f] text-[#9494a8] hover:text-white text-[11px] font-medium transition-colors cursor-pointer"
+              >
+                Flow 1: Task
+              </button>
+              <button
+                onClick={() => triggerFlow(2)}
+                title="Flow 2: Automations ➔ Builder ➔ Permission ➔ Run"
+                className="px-2.5 py-1 rounded-lg bg-[#1a1a25] hover:bg-[#22222f] text-[#9494a8] hover:text-white text-[11px] font-medium transition-colors cursor-pointer"
+              >
+                Flow 2: Auto
+              </button>
+              <button
+                onClick={() => triggerFlow(3)}
+                title="Flow 3: Command Palette ➔ File Search ➔ AI Action"
+                className="px-2.5 py-1 rounded-lg bg-[#1a1a25] hover:bg-[#22222f] text-[#9494a8] hover:text-white text-[11px] font-medium transition-colors cursor-pointer"
+              >
+                Flow 3: Files
+              </button>
+              <button
+                onClick={() => triggerFlow(4)}
+                title="Flow 4: Modules ➔ Detail ➔ Permissions"
+                className="px-2.5 py-1 rounded-lg bg-[#1a1a25] hover:bg-[#22222f] text-[#9494a8] hover:text-white text-[11px] font-medium transition-colors cursor-pointer"
+              >
+                Flow 4: Modules
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+
+      {/* Global Modals & Overlay Widgets */}
+      <CommandPaletteModal
+        isOpen={isCommandPaletteOpen || activeScreen === "03-palette" || activeScreen === "screen-03-command-palette"}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onNavigate={handleNavigate}
+        onExecuteCommand={(cmd) => {
+          setActiveScreen("02-command");
+        }}
+      />
+
+      <GlobalSearchModal
+        isOpen={isGlobalSearchOpen || activeScreen === "29-global-search" || activeScreen === "screen-29-global-search"}
+        onClose={() => setIsGlobalSearchOpen(false)}
+        onNavigate={handleNavigate}
+      />
+
+      <PermissionModal
+        isOpen={isPermissionModalOpen || activeScreen === "23-permission-modal" || activeScreen === "screen-23-permission-modal"}
+        appName={permissionPayload.appName}
+        reason={permissionPayload.reason}
+        onClose={() => setIsPermissionModalOpen(false)}
+        onAllowOnce={() => {
+          setIsPermissionModalOpen(false);
+          setActiveScreen("07-task-detail");
+        }}
+        onAlwaysAllow={() => {
+          setIsPermissionModalOpen(false);
+          setActiveScreen("07-task-detail");
+        }}
+      />
+
+      <AiConfirmationModal
+        isOpen={isConfirmationModalOpen || activeScreen === "24-ai-confirmation" || activeScreen === "screen-24-ai-confirmation"}
+        workflowName={confirmationPayload.workflowName}
+        steps={confirmationPayload.steps}
+        onClose={() => setIsConfirmationModalOpen(false)}
+        onApprove={() => {
+          setIsConfirmationModalOpen(false);
+          setActiveScreen("26-success");
+        }}
+        onReview={() => {
+          setIsConfirmationModalOpen(false);
+          setActiveScreen("07-task-detail");
+        }}
+      />
+
+      <ProfileMenuModal
+        isOpen={isProfileMenuOpen || activeScreen === "30-profile-menu" || activeScreen === "screen-30-profile-menu"}
+        onClose={() => setIsProfileMenuOpen(false)}
+        onNavigate={handleNavigate}
+      />
+
+      <DesktopOverlayWidget
+        isOpen={isDesktopOverlayVisible || activeScreen === "31-desktop-overlay" || activeScreen === "screen-31-desktop-overlay"}
+        onClose={() => setIsDesktopOverlayVisible(false)}
+        onNavigate={handleNavigate}
+        onExecuteCommand={(cmd) => {
+          setActiveScreen("02-command");
+        }}
+      />
+
+      <DesktopNotificationToast
+        isOpen={isToastNotificationVisible || activeScreen === "32-desktop-notifications" || activeScreen === "screen-32-desktop-notification"}
+        onClose={() => setIsToastNotificationVisible(false)}
+        onNavigate={handleNavigate}
+      />
     </div>
   );
 }
