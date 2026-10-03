@@ -1,7 +1,8 @@
 # NEXUS — AI Model Runtime & Provider Management Architecture
 
-**Document Version:** 1.0.0  
+**Document Version:** 2.0.0  
 **Status:** Approved Production Architecture Baseline  
+**Supersedes:** v1.0.0  
 **Classification:** Core AI Infrastructure, Model Runtime Engineering & Provider Governance  
 **Target Systems:** NEXUS Desktop (Windows x64 Native / Tauri + FastAPI Engine) & NEXUS Mobile Companion (Android Node)  
 **Primary Sources of Truth:**
@@ -76,37 +77,48 @@ This document defines the **AI Model Runtime & Provider Management Architecture*
 
 ## 3. Existing Architecture Reconciliation
 
-An audit of the codebase, architecture documents, and active implementation reveals the following baseline:
+A thorough audit of the active codebase and all architecture documents has been performed. The following table records the verified baseline state of every relevant component, distinguishing **existing implementation** from **proposed extensions**.
 
-| Dimension | Active Specification | Baseline Implementation | Reconciliation Decision |
-| :--- | :--- | :--- | :--- |
-| **Provider Interface** | `ModelProvider` ABC in `ai/provider.py` | `check_health()`, `list_models()`, `chat()`, `chat_stream()` | **Extend**: Add `get_capabilities()`, `generate_structured()`, `generate_with_tools()`. Do not replace. |
-| **Data Types** | `ChatMessage`, `StreamChunk`, `ModelInfo` dataclasses | Frozen dataclasses in `ai/provider.py` | **Extend**: Add `ModelCapability`, `InferenceRequest`, `InferenceResult`, `ToolCallChunk`. |
-| **Ollama Adapter** | `OllamaAdapter` in `ai/ollama_adapter.py` | HTTP REST client with NDJSON streaming | **Extend**: Add tool-call parsing, model metadata discovery, context-window verification. |
-| **Configuration** | `Settings` in `config.py` | `OLLAMA_BASE_URL`, `OLLAMA_DEFAULT_MODEL`, `OLLAMA_MODEL` | **Extend**: Add provider registry config, agent model overrides, privacy settings. |
-| **Exception Hierarchy** | `ModelProviderError`, `LLMConnectionError`, `LLMResponseError` | Defined in `core/exceptions.py` | **Extend**: Add `ModelUnavailableError`, `ContextOverflowError`, `StructuredOutputError`. |
-| **API Schema** | `ModelItemResponse`, `ModelListResponse`, `ModelStatusResponse` | Defined in `schemas/model.py` | **Extend**: Add capability metadata, provider health states, routing info. |
-| **API Gateway** | `ModelProviderInterface` with `generate_completion()`, `generate_stream()`, `get_capabilities()` | Conceptual in API Gateway doc | **Align**: This document provides the definitive implementation specification for that interface. |
-| **Integration Inventory** | `INT-05` (Ollama), `INT-06` (External AI) | Cataloged in API Gateway doc | **Reference**: Inherit timeout, retry, and circuit-breaker policies. |
+### 3.1 Codebase Baseline Audit
 
-### 3.1 Architectural Conflicts & Resolutions
+| Dimension | Active Specification | Implemented Code | Baseline Status | Reconciliation Decision |
+| :--- | :--- | :--- | :--- | :--- |
+| **Provider Interface** | `ModelProvider` ABC | `ai/provider.py` — `check_health()`, `list_models()`, `chat()`, `chat_stream()` | **Implemented** (83 lines) | **Extend**: Add `get_model_capabilities()`, `chat_with_tools()`, `chat_structured()`, `get_health_state()`, `cancel_request()`. Do not replace. |
+| **Data Types** | `ChatMessage`, `StreamChunk`, `ModelInfo` | Frozen dataclasses in `ai/provider.py` | **Implemented** | **Extend**: Add `ModelCapability`, `InferenceRequest`, `InferenceResult`, `ToolCallChunk`. |
+| **Ollama Adapter** | `OllamaAdapter` | `ai/ollama_adapter.py` — HTTP REST with NDJSON streaming, `_build_payload()` | **Implemented** (200 lines) | **Extend**: Add tool-call parsing, model metadata discovery via `/api/show`, context-window verification, health state granularity. |
+| **Configuration** | `Settings` | `config.py` — `OLLAMA_BASE_URL`, `OLLAMA_DEFAULT_MODEL`, `OLLAMA_MODEL` | **Implemented** (53 lines) | **Extend**: Add `ModelRuntimeSettings` with provider registry, privacy toggles, resource limits. |
+| **Exception Hierarchy** | `ModelProviderError` → `LLMConnectionError`, `LLMResponseError` | `core/exceptions.py` (147 lines) | **Implemented** | **Extend**: Add `ModelUnavailableError`, `ContextOverflowError`, `StructuredOutputError`, `ProviderRateLimitError`. |
+| **Event System** | `EventEnvelope`, `EventType` enum | `core/events.py` — 15 event types, no inference events | **Implemented** (76 lines) | **Extend**: Add `inference.*` and `provider.*` event types. |
+| **API Schema** | `ModelItemResponse`, `ModelListResponse`, `ModelStatusResponse` | `schemas/model.py` (34 lines) | **Implemented** | **Extend**: Add capability metadata, provider health states, routing info. |
+| **API Gateway** | `ModelProviderInterface` with `generate_completion()`, `generate_stream()`, `get_capabilities()` | Conceptual in API Gateway doc (INT-05/INT-06) | **Specified, Not Implemented** | **Align**: This document provides the definitive implementation specification. |
 
-| Conflict | Resolution |
-| :--- | :--- |
-| Tech Stack §12 references `LiteLLM / Custom Adapter` while Backend §23 shows only `OllamaAdapter` + `LiteLLMAdapter` stubs. | This document specifies the `LiteLLMAdapter` as the V1 external provider bridge. MVP uses direct `OllamaAdapter` + optional `OpenAICompatibleAdapter`. |
-| API Gateway §13 defines `ModelProviderInterface` with `generate_completion()` while `ai/provider.py` uses `chat()` / `chat_stream()`. | Align on the existing `ModelProvider` ABC as the canonical interface. Extend it to match gateway contract capabilities. |
-| Memory Architecture references `nomic-embed-text:v1.5` via Ollama while Tech Stack §14 specifies `FastEmbed (bge-small-en-v1.5)`. | Embeddings remain under the RAG/Memory subsystem. This document governs LLM inference providers only. Embedding generation is out of scope. |
+### 3.2 Architectural Conflicts & Resolutions
+
+| Conflict | Source Documents | Resolution |
+| :--- | :--- | :--- |
+| Tech Stack §12 references `LiteLLM / Custom Adapter` while Backend shows only `OllamaAdapter`. | Tech Stack vs. Backend Architecture | This document specifies `LiteLLM` as the V1 external provider bridge. MVP uses direct `OllamaAdapter` + optional `OpenAICompatibleAdapter`. |
+| API Gateway §13 defines `ModelProviderInterface` with `generate_completion()` while `ai/provider.py` uses `chat()` / `chat_stream()`. | API Gateway vs. `ai/provider.py` | Align on the existing `ModelProvider` ABC as the canonical interface. Extend it to match gateway contract capabilities. |
+| Memory Architecture references `nomic-embed-text:v1.5` via Ollama while Tech Stack specifies `FastEmbed (bge-small-en-v1.5)`. | Memory Architecture vs. Tech Stack | Embeddings remain under the RAG/Memory subsystem. This document governs LLM inference providers only. Embedding generation is out of scope. |
+| `events.py` defines `EventType` enum with no inference-related events, but this architecture requires `inference.*` and `provider.*` events. | `core/events.py` vs. This Document | Extend `EventType` enum with new inference/provider event constants. No separate event system. |
+| `config.py` uses `NEXUS_` env prefix with flat settings; this architecture requires nested model runtime settings. | `config.py` vs. This Document | Add model runtime fields to existing `Settings` class via composition. Do not create a separate settings module. |
+
+### 3.3 Missing Documents Inventory
+
+| Expected Reference | Status | Impact |
+| :--- | :--- | :--- |
+| `NEXUS_AGENT_ORCHESTRATION_AND_DAG_ARCHITECTURE.md` | Does not exist | Agent-to-model handoff protocol specified conceptually in this document; detailed DAG sequencing deferred to that future document. |
+| Tool Registry / Tool Runtime Architecture | Specified in Backend Architecture §50; no standalone doc | Tool-call authorization pipeline references existing `ToolRegistry` and 5-Tier Permission Gate from Security Architecture. |
 
 ---
 
 ## 4. Confirmed Architectural Decisions
 
-1. **Single Provider Interface**: The existing `ModelProvider` ABC (`ai/provider.py`) is the canonical provider interface. All extensions defined in this document augment this interface.
+1. **Single Provider Interface**: The existing `ModelProvider` ABC in `ai/provider.py` is the canonical provider interface. All extensions defined in this document augment this interface without replacing it.
 2. **Ollama Primary MVP Runtime**: Ollama v0.4+ at `127.0.0.1:11434` is the primary local inference daemon for MVP.
 3. **OpenAI-Compatible API Format**: All provider adapters normalize to OpenAI-compatible request/response schemas internally.
-4. **Pydantic v2 Contracts**: All request/response DTOs use Pydantic v2 strict models, consistent with the existing schema layer.
+4. **Pydantic v2 Contracts**: All request/response DTOs use Pydantic v2 strict models, consistent with the existing schema layer in `schemas/`.
 5. **Privacy-First Default**: External provider communication is disabled by default and requires explicit user opt-in per project.
-6. **Structured Event Bus**: All model runtime events emit through the existing `NexusEventEnvelope` event bus.
+6. **Structured Event Bus**: All model runtime events emit through the existing `EventEnvelope` in `core/events.py`.
 7. **OS Keyring for API Keys**: External provider credentials are stored exclusively in the Windows Credential Manager / OS Keyring, never in SQLite, logs, or environment files.
 
 ---
@@ -114,18 +126,21 @@ An audit of the codebase, architecture documents, and active implementation reve
 ## 5. Assumptions and Unresolved Decisions
 
 ### 5.1 Assumptions
+
 - Users install and manage Ollama and model weights independently of NEXUS.
 - Local hardware capabilities (GPU/VRAM) are detectable via `psutil` and optional NVML bindings.
 - Ollama's `/api/show` endpoint reliably reports model metadata including context window and capability flags.
+- The existing `httpx` async HTTP client (used in `OllamaAdapter`) is the standard HTTP library for all provider adapters.
 
 ### 5.2 Unresolved Decisions
 
 | ID | Topic | Current Recommendation | Resolution Required |
 | :--- | :--- | :--- | :--- |
-| `TBD-MR-01` | **LiteLLM vs. Direct Provider Adapters** | MVP uses direct adapters; V1 evaluates LiteLLM for multi-provider normalization. | Benchmark LiteLLM overhead vs. direct `httpx` adapters before V1. |
-| `TBD-MR-02` | **Model Download Orchestration** | NEXUS does not manage model downloads in MVP. | Evaluate whether to expose Ollama `pull` API in V1 UI. |
-| `TBD-MR-03` | **Embedding Provider Unification** | Embeddings use FastEmbed (separate from LLM providers). | Evaluate whether to route embedding requests through the unified provider layer in V1. |
-| `TBD-MR-04` | **GPU Memory Reservation Protocol** | psutil-based VRAM estimation for MVP. | Evaluate NVML direct telemetry for precise VRAM allocation tracking. |
+| `TBD-MR-01` | **LiteLLM vs. Direct Provider Adapters** | MVP uses direct adapters; V1 evaluates LiteLLM for multi-provider normalization. | Benchmark LiteLLM overhead vs. direct `httpx` adapters before V1. **TBD — Requires Approval**. |
+| `TBD-MR-02` | **Model Download Orchestration** | NEXUS does not manage model downloads in MVP. | Evaluate whether to expose Ollama `pull` API in V1 UI. **TBD — Requires Approval**. |
+| `TBD-MR-03` | **Embedding Provider Unification** | Embeddings use FastEmbed (separate from LLM providers). | Evaluate whether to route embedding requests through the unified provider layer in V1. **TBD — Requires Approval**. |
+| `TBD-MR-04` | **GPU Memory Reservation Protocol** | psutil-based VRAM estimation for MVP. | Evaluate NVML direct telemetry for precise VRAM allocation tracking. **TBD — Requires Approval**. |
+| `TBD-MR-05` | **Tokenizer Selection for Context Budget** | Use model-specific tokenizer when available; fall back to `tiktoken` for OpenAI-compatible models and character-based estimation otherwise. | Validate tokenizer accuracy for Qwen-family models. **TBD — Requires Approval**. |
 
 ---
 
@@ -133,7 +148,7 @@ An audit of the codebase, architecture documents, and active implementation reve
 
 ### 6.1 Extended Provider Interface
 
-The existing `ModelProvider` ABC is extended with capability discovery, structured output, and tool-calling support. The extension preserves backward compatibility with the implemented `OllamaAdapter`.
+The existing `ModelProvider` ABC (`ai/provider.py`) is the canonical provider contract. This document specifies backward-compatible extensions for capability discovery, structured output, tool calling, granular health, and cancellation. The existing methods (`check_health`, `list_models`, `chat`, `chat_stream`) remain unchanged.
 
 ```python
 from abc import ABC, abstractmethod
@@ -172,7 +187,9 @@ class ModelCapability:
     supports_structured_output: bool = False
     supports_vision: bool = False
     max_output_tokens: int | None = None
-    supported_roles: list[str] = field(default_factory=lambda: ["system", "user", "assistant"])
+    supported_roles: list[str] = field(
+        default_factory=lambda: ["system", "user", "assistant"]
+    )
     provider_type: ProviderType = ProviderType.LOCAL
     verified: bool = False               # True if capabilities were runtime-verified
 
@@ -191,6 +208,7 @@ class InferenceRequest:
     task_id: str | None = None
     agent_type: str | None = None
     correlation_id: str | None = None
+    provider_options: dict[str, Any] = field(default_factory=dict)  # Opaque provider params
 
 
 @dataclass(frozen=True)
@@ -221,6 +239,19 @@ class ModelProvider(ABC):
 
     Extended from the existing ai/provider.py contract to support
     capability negotiation, structured outputs, and tool calling.
+
+    EXISTING METHODS (unchanged):
+      - check_health() -> bool
+      - list_models() -> list[ModelInfo]
+      - chat(messages, model, temperature, max_tokens, stop) -> str
+      - chat_stream(messages, model, temperature, max_tokens, stop) -> AsyncIterator[StreamChunk]
+
+    NEW METHODS (proposed extensions):
+      - get_model_capabilities(model) -> ModelCapability
+      - chat_with_tools(messages, tools, model, temperature) -> InferenceResult
+      - chat_structured(messages, response_schema, model, temperature) -> InferenceResult
+      - get_health_state() -> ProviderHealthState
+      - cancel_request(request_id) -> bool
     """
 
     provider_id: str = ""
@@ -303,7 +334,11 @@ class ModelProvider(ABC):
 
     async def get_health_state(self) -> ProviderHealthState:
         """Return granular health state. Default delegates to check_health()."""
-        return ProviderHealthState.AVAILABLE if await self.check_health() else ProviderHealthState.UNAVAILABLE
+        return (
+            ProviderHealthState.AVAILABLE
+            if await self.check_health()
+            else ProviderHealthState.UNAVAILABLE
+        )
 
     async def cancel_request(self, request_id: str) -> bool:
         """Cancel an in-flight inference request. Returns True if cancelled."""
@@ -312,21 +347,51 @@ class ModelProvider(ABC):
 
 ### 6.2 Provider-Specific Capabilities
 
-Provider-specific features (e.g., Ollama's `num_ctx`, Anthropic's `thinking` blocks) are passed via an opaque `provider_options: dict[str, Any]` parameter in the `InferenceRequest`. The provider adapter maps these to provider-native parameters internally. Agents and the orchestrator never reference provider-specific option keys directly.
+Provider-specific features (e.g., Ollama's `num_ctx`, Anthropic's `thinking` blocks) are passed via the opaque `provider_options: dict[str, Any]` field in `InferenceRequest`. The provider adapter maps these to provider-native parameters internally. Agents and the task orchestrator never reference provider-specific option keys directly.
 
 ### 6.3 Consistent Error Normalization
 
-All providers map their native errors to the existing NEXUS exception hierarchy:
+All providers map their native errors to the existing NEXUS exception hierarchy in `core/exceptions.py`:
 
-| Provider Error | NEXUS Exception | Retryable |
-| :--- | :--- | :--- |
-| Connection refused / timeout | `LLMConnectionError` | Yes |
-| HTTP 4xx (auth, validation) | `LLMResponseError` | No |
-| HTTP 429 (rate limit) | `ProviderRateLimitError` (new) | Yes |
-| HTTP 5xx (server error) | `LLMResponseError` | Yes |
-| Invalid structured output | `StructuredOutputError` (new) | Yes (retry with prompt repair) |
-| Context window exceeded | `ContextOverflowError` (new) | No |
-| Model not found / unavailable | `ModelUnavailableError` (new) | No |
+| Provider Error | NEXUS Exception | Error Code | Retryable |
+| :--- | :--- | :--- | :--- |
+| Connection refused / timeout | `LLMConnectionError` (existing) | `LLM_CONNECTION_FAILED` | Yes |
+| HTTP 4xx (auth, validation) | `LLMResponseError` (existing) | `LLM_RESPONSE_ERROR` | No |
+| HTTP 429 (rate limit) | `ProviderRateLimitError` (new) | `PROVIDER_RATE_LIMITED` | Yes |
+| HTTP 5xx (server error) | `LLMResponseError` (existing) | `LLM_RESPONSE_ERROR` | Yes |
+| Invalid structured output | `StructuredOutputError` (new) | `STRUCTURED_OUTPUT_INVALID` | Yes (retry with prompt repair) |
+| Context window exceeded | `ContextOverflowError` (new) | `CONTEXT_OVERFLOW` | No |
+| Model not found / unavailable | `ModelUnavailableError` (new) | `MODEL_UNAVAILABLE` | No |
+
+New exceptions extend the existing `ModelProviderError` parent class:
+
+```python
+# Proposed additions to core/exceptions.py
+
+class ModelUnavailableError(ModelProviderError):
+    """Requested model is not available in the provider."""
+    error_code = "MODEL_UNAVAILABLE"
+    retryable = False
+
+class ContextOverflowError(ModelProviderError):
+    """Request context exceeds the model's maximum context window."""
+    error_code = "CONTEXT_OVERFLOW"
+    retryable = False
+
+class StructuredOutputError(ModelProviderError):
+    """Model produced invalid structured output after retry attempts."""
+    error_code = "STRUCTURED_OUTPUT_INVALID"
+    retryable = True
+
+class ProviderRateLimitError(ModelProviderError):
+    """External provider rate limit reached."""
+    error_code = "PROVIDER_RATE_LIMITED"
+    retryable = True
+```
+
+### 6.4 Request and Response Contract
+
+All provider adapters normalize requests and responses to the `InferenceRequest` / `InferenceResult` contracts defined in §6.1. This ensures that the `ModelRouter` and agent runtime interact with a single, provider-independent schema. Provider-specific wire formats (Ollama NDJSON, OpenAI SSE, Anthropic content blocks) are translated within each adapter and never leak to callers.
 
 ---
 
@@ -339,55 +404,54 @@ flowchart TD
     Start[NEXUS Backend Startup] --> DetectOllama{Probe Ollama at\nconfigured base URL}
     DetectOllama -->|HTTP 200 /api/version| Connected[Ollama Connected]
     DetectOllama -->|Connection Refused| NotInstalled{Is Ollama installed\non system PATH?}
-    NotInstalled -->|Found| NotRunning[Ollama Not Running\nEmit PROVIDER_UNAVAILABLE event]
-    NotInstalled -->|Not Found| Missing[Ollama Not Installed\nEmit PROVIDER_MISSING event]
+    NotInstalled -->|Found| NotRunning["Ollama Not Running\nEmit PROVIDER_UNAVAILABLE event"]
+    NotInstalled -->|Not Found| Missing["Ollama Not Installed\nEmit PROVIDER_MISSING event"]
     
-    Connected --> ListModels[Query GET /api/tags\nCatalog installed models]
+    Connected --> ListModels["Query GET /api/tags\nCatalog installed models"]
     ListModels --> VerifyDefault{Default model\ninstalled?}
-    VerifyDefault -->|Yes| DiscoverCaps[Query GET /api/show\nDiscover capabilities]
-    VerifyDefault -->|No| WarnUser[Emit MODEL_NOT_FOUND\nalert to UI]
-    DiscoverCaps --> Ready[Ollama Provider AVAILABLE\nModel registry populated]
+    VerifyDefault -->|Yes| DiscoverCaps["Query GET /api/show\nDiscover capabilities"]
+    VerifyDefault -->|No| WarnUser["Emit MODEL_NOT_FOUND\nalert to UI"]
+    DiscoverCaps --> Ready["Ollama Provider AVAILABLE\nModel registry populated"]
     
-    NotRunning --> DegradedMode[Local AI Degraded\nQueue inference requests]
+    NotRunning --> DegradedMode["Local AI Degraded\nQueue inference requests"]
     Missing --> DegradedMode
     WarnUser --> DegradedMode
 ```
 
 ### 7.2 Ollama Adapter Extension
 
-The existing `OllamaAdapter` (`ai/ollama_adapter.py`) is extended with the following capabilities:
+The existing `OllamaAdapter` in `ai/ollama_adapter.py` (200 lines) is extended with the following capabilities. All existing methods (`check_health`, `list_models`, `chat`, `chat_stream`, `_build_payload`) remain unchanged.
 
-| Capability | Ollama API Endpoint | Implementation |
+| Capability | Ollama API Endpoint | Implementation Status |
 | :--- | :--- | :--- |
-| **Runtime Version** | `GET /api/version` | Existing `check_health()` enhanced to capture version string |
-| **Model Listing** | `GET /api/tags` | Existing `list_models()` — returns `ModelInfo` list |
-| **Model Metadata** | `GET /api/show` | New — queries context window (`num_ctx`), parameter count, template format |
-| **Capability Verification** | `POST /api/chat` (test call) | New — sends minimal test prompt to verify tool-call and structured-output support |
-| **Model Loading** | `POST /api/chat` (first request) | Ollama auto-loads models on first request; NEXUS detects loading state via response timing |
-| **Health State** | `GET /api/version` + `GET /api/ps` | New — combines version check with running model inspection |
-| **Cancellation** | HTTP client socket close | Existing — aborting the `httpx` stream causes Ollama to halt generation |
+| **Runtime Version** | `GET /api/version` | **Existing** — `check_health()` probes this. Enhance to capture version string. |
+| **Model Listing** | `GET /api/tags` | **Existing** — `list_models()` returns `ModelInfo` list with name, size, family, param size, quantization. |
+| **Model Metadata** | `GET /api/show` | **Proposed** — New method to query context window (`num_ctx`), parameter count, template format, model digest hash. |
+| **Capability Verification** | `POST /api/chat` (test call) | **Proposed** — Sends minimal test prompt to verify tool-call and structured-output support at registration time. |
+| **Model Loading** | `POST /api/chat` (first request) | Ollama auto-loads models on first request; NEXUS detects loading state via response timing. |
+| **Running Models** | `GET /api/ps` | **Proposed** — New probe to inspect which models are currently loaded in memory. |
+| **Health State** | `GET /api/version` + `GET /api/ps` | **Proposed** — Combines version check with running model inspection for granular `ProviderHealthState`. |
+| **Cancellation** | HTTP client socket close | **Existing** — Aborting the `httpx` stream causes Ollama to halt generation. |
 
 ### 7.3 Connection Configuration
 
+The following settings extend the existing `Settings` class in `config.py`:
+
 ```python
-# Extended config.py settings (additive to existing Settings)
-class ModelRuntimeSettings:
-    """AI Model Runtime configuration."""
-    
-    # Ollama Local Runtime
-    OLLAMA_BASE_URL: str = "http://127.0.0.1:11434"
-    OLLAMA_DEFAULT_MODEL: str = "qwen2.5-coder:14b"
-    OLLAMA_TIMEOUT_SECONDS: float = 120.0
-    OLLAMA_HEALTH_CHECK_INTERVAL_SECONDS: float = 60.0
-    OLLAMA_DEFAULT_NUM_CTX: int = 32768
-    
-    # Provider Registry
-    EXTERNAL_PROVIDERS_ENABLED: bool = False    # Master switch — disabled by default
-    LOCAL_ONLY_MODE: bool = True                # Privacy enforcement toggle
-    
-    # Resource Limits
-    MAX_CONCURRENT_INFERENCE_REQUESTS: int = 1  # MVP: serial inference
-    INFERENCE_QUEUE_MAX_SIZE: int = 10
+# Proposed additions to config.py Settings class
+
+# Ollama Local Runtime (extends existing OLLAMA_BASE_URL, OLLAMA_DEFAULT_MODEL, OLLAMA_MODEL)
+OLLAMA_TIMEOUT_SECONDS: float = 120.0
+OLLAMA_HEALTH_CHECK_INTERVAL_SECONDS: float = 60.0
+OLLAMA_DEFAULT_NUM_CTX: int = 32768
+
+# Provider Registry
+EXTERNAL_PROVIDERS_ENABLED: bool = False    # Master switch — disabled by default
+LOCAL_ONLY_MODE: bool = True                # Privacy enforcement toggle
+
+# Resource Limits
+MAX_CONCURRENT_INFERENCE_REQUESTS: int = 1  # MVP: serial inference
+INFERENCE_QUEUE_MAX_SIZE: int = 10
 ```
 
 ### 7.4 Runtime Failure Handling
@@ -401,7 +465,32 @@ class ModelRuntimeSettings:
 | **Ollama OOM / crash during inference** | HTTP stream terminated unexpectedly; non-zero error in NDJSON | Emit `inference.failed` event. Transition task step to error state. Attempt fallback if configured. |
 | **Ollama version incompatible** | `/api/version` returns version < minimum required | Emit `provider.misconfigured` event. Log version mismatch. Continue with capability degradation warnings. |
 
-NEXUS does not assume a model is available merely because it appears in configuration. Model availability is verified at task launch time via `GET /api/tags`.
+**Critical Rule**: NEXUS does not assume a model is available merely because it appears in configuration. Model availability is verified at task launch time via `GET /api/tags`.
+
+### 7.5 Model Download and Installation
+
+NEXUS does not manage model downloads in MVP. Model installation is the user's responsibility:
+
+1. User installs models via `ollama pull <model>` CLI.
+2. NEXUS discovers installed models via `GET /api/tags` at startup and periodic refresh.
+3. If a configured default model is not installed, NEXUS emits a `model.not_found` event with actionable guidance ("Run `ollama pull qwen2.5-coder:14b` to install").
+4. **TBD-MR-02**: V1 may expose Ollama's `POST /api/pull` endpoint via the NEXUS UI, subject to approval.
+
+### 7.6 Model Loading and Unloading
+
+Ollama manages model loading and unloading internally:
+
+1. Models are loaded into memory on first inference request.
+2. Ollama auto-unloads idle models after a configurable timeout (default: 5 minutes).
+3. NEXUS detects the loading state by monitoring response latency and the `GET /api/ps` endpoint.
+4. During model loading, the provider health state transitions to `LOADING_MODEL`.
+5. NEXUS does not explicitly request model loading or unloading in MVP.
+
+### 7.7 Runtime Startup and Shutdown
+
+1. **Startup**: NEXUS probes Ollama at `OLLAMA_BASE_URL` during backend startup. If Ollama is not reachable, the backend starts in degraded mode — all non-AI features remain functional.
+2. **Shutdown**: NEXUS does not manage Ollama's lifecycle. Ollama runs as an independent system service. Backend shutdown cleanly closes all active `httpx` connections.
+3. **Reconnection**: If Ollama becomes available after backend startup, periodic health probes (60s interval) detect the change and automatically populate the model registry.
 
 ---
 
@@ -439,19 +528,23 @@ External providers are opt-in and subject to explicit, project-level consent:
 
 ### 8.2 Supported External Provider Adapters
 
+No single external provider is hardcoded as the only supported option. The provider abstraction supports any provider that implements the `ModelProvider` interface:
+
 | Provider | Adapter Class | Auth Method | Streaming Format | Tool Calling | Phase |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **OpenAI-Compatible** | `OpenAICompatibleAdapter` | API Key (Bearer) | SSE (`data: [DONE]`) | Native JSON Schema | MVP |
 | **Anthropic Claude** | `AnthropicAdapter` | API Key (`x-api-key`) | SSE (`content_block_delta`) | Tool Use Blocks | V1 |
 | **Google Gemini** | `GeminiAdapter` | API Key (query param) | REST / gRPC stream | Function Declarations | V1 |
 | **DeepSeek** | `OpenAICompatibleAdapter` | API Key (Bearer) | SSE (OpenAI-format) | JSON Tool Calls | V1 |
+| **Custom / Self-Hosted** | `OpenAICompatibleAdapter` | Configurable | SSE (OpenAI-format) | Provider-dependent | V1 |
 
 ### 8.3 External Provider Security Constraints
 
 1. **Credential Isolation**: API keys are stored in the Windows Credential Manager via the `keyring` library (per Security Architecture §30). Keys are decrypted into a memory arena, used for the request, and zeroed after use.
 2. **Pre-Transmission Secret Redaction**: Before any prompt content is sent to an external provider, the pre-persistence redaction engine (per Observability Architecture §4) scans and strips API keys, passwords, and secrets from the message payload.
 3. **No Credential Logging**: API keys are never logged, emitted in events, or displayed in the UI. Error messages referencing credentials display redacted placeholders (`sk-****...****`).
-4. **Provider Disclosure**: When a task uses a remote model, the UI displays a visible indicator ("☁ External: OpenAI gpt-4o") and the `inference.started` event records `provider_type: "remote"`.
+4. **Provider Disclosure**: When a task uses a remote model, the UI displays a visible indicator and the `inference.started` event records `provider_type: "remote"`.
+5. **TLS Enforcement**: All external provider communication uses TLS 1.2+ (TLS 1.3 preferred). Certificate validation is enforced; self-signed certificates are not accepted by default.
 
 ### 8.4 External Provider Configuration
 
@@ -470,6 +563,42 @@ class ExternalProviderConfig(BaseModel):
     rate_limit_rpm: int | None = None    # Requests per minute cap
     supported_models: list[str] = []     # Allowlisted model identifiers
 ```
+
+### 8.5 Provider Registration
+
+New external providers are registered through:
+
+1. **Configuration file** (`~/.nexus/config.toml`) — static provider definitions.
+2. **Settings UI** — user configures provider ID, base URL, credential key, and supported models.
+3. **Runtime validation** — on registration, NEXUS probes the provider's health endpoint and lists available models.
+4. Provider registration does not activate the provider for any project. Project-level opt-in is required separately.
+
+### 8.6 Request and Rate Limits
+
+| Constraint | Enforcement | Behavior on Violation |
+| :--- | :--- | :--- |
+| Requests per minute | In-memory sliding window counter | Delay request; emit `provider.rate_limited` event |
+| Provider-reported rate limit (429) | Parse `Retry-After` header | Wait specified duration; retry up to 3 times |
+| Network timeout | `httpx` timeout configuration | Raise `LLMConnectionError`; retry if retryable |
+| Maximum request payload | Provider-specific limit | Validate before transmission; raise `ContextOverflowError` |
+
+### 8.7 Usage Reporting
+
+Each external provider request records:
+- Token usage (prompt + completion) from provider response headers/body
+- Estimated cost (if pricing metadata available in provider config)
+- Request latency
+- Provider ID and model ID
+
+Usage data is stored locally and never transmitted externally.
+
+### 8.8 Provider Availability
+
+External provider availability is determined by:
+1. **Health probes** at configured intervals (default: 120s for external).
+2. **Credential validation** — provider marked `AUTH_REQUIRED` if credential key is missing or invalid.
+3. **Model availability** — provider lists models on registration; unavailable models are flagged.
+4. **Network reachability** — DNS resolution and TCP connection are verified during health probes.
 
 ---
 
@@ -518,6 +647,7 @@ class ModelDefinition:
     
     # Version & Metadata
     model_version: str = ""              # Model version identifier
+    model_digest: str = ""               # Content hash for change detection
     family: str = ""                     # Model family (e.g., "qwen2.5")
     parameter_size: str = ""             # e.g., "14B"
     quantization_level: str = ""         # e.g., "Q4_K_M"
@@ -531,6 +661,7 @@ class ModelDefinition:
     supports_structured_output: bool = False
     supports_vision: bool = False
     supported_input_modalities: list[str] = field(default_factory=lambda: ["text"])
+    supports_embedding: bool = False     # Whether model supports embedding generation
     
     # Verification
     capabilities_verified: bool = False  # True if verified via runtime test
@@ -543,6 +674,10 @@ class ModelDefinition:
     # Resource Requirements (estimated)
     estimated_vram_mb: int = 0
     estimated_ram_mb: int = 0
+    
+    # Configuration Parameters
+    default_temperature: float = 0.2
+    default_num_ctx: int | None = None   # Override for context window
 ```
 
 ### 9.3 Capability Verification Protocol
@@ -557,7 +692,19 @@ Provider-declared capabilities are not trusted by default. NEXUS verifies critic
 | **Structured Output** | Send test prompt with JSON schema constraint; validate output parsability | Mark `supports_structured_output = False` |
 | **Vision** | Check model metadata for multimodal support flags | Mark `supports_vision = False` |
 
-### 9.4 Registry Refresh Policy
+Capability verification test prompts are minimal (< 50 tokens input) and do not process user data. Verification occurs once per model registration, not per inference request.
+
+### 9.4 Distinguishing Verified vs. Declared Capabilities
+
+| Source | `capabilities_source` Value | Trust Level | Usage |
+| :--- | :--- | :--- | :--- |
+| Ollama `/api/show` metadata | `"declared"` | Low — provider claims, not verified | Used as initial defaults |
+| NEXUS runtime test prompt | `"runtime_verified"` | High — empirically confirmed | Preferred for routing decisions |
+| User manual override | `"user_configured"` | Medium — user knows their setup | Overrides declared if set |
+
+The `ModelRouter` (§10) prefers runtime-verified models over declared-only models when multiple candidates exist.
+
+### 9.5 Registry Refresh Policy
 
 | Event | Refresh Action |
 | :--- | :--- |
@@ -566,6 +713,16 @@ Provider-declared capabilities are not trusted by default. NEXUS verifies critic
 | User changes model config | Targeted model capability verification |
 | Provider health state change | Re-probe affected provider's model list |
 | Explicit user refresh action | Full re-discovery of all providers |
+| Model not found during routing | Immediate re-discovery of the affected provider |
+
+### 9.6 Handling Unsupported Capabilities
+
+When an agent requires a capability the selected model does not support:
+
+1. The `ModelRouter` attempts to find an alternative model with the required capability.
+2. If no alternative is found locally and external providers are not permitted, the system emits a `model.capability_mismatch` event.
+3. The user is notified with specific guidance: "Planner agent requires structured output, but the selected model does not support it. Consider using model X or enabling external providers."
+4. The task step fails safely — it does not proceed with degraded capability unless the capability is explicitly optional for the agent.
 
 ---
 
@@ -591,13 +748,13 @@ flowchart TD
     CapabilityMatch --> SelectBest[Select best compatible\nmodel from registry]
     SelectBest --> PrivacyCheck
     
-    PrivacyCheck -->|Remote model +\nLocal-only mode| BlockRoute[REJECT: Privacy\nviolation]
+    PrivacyCheck -->|Remote model +\nLocal-only mode| BlockRoute["REJECT: Privacy\nviolation"]
     PrivacyCheck -->|Passes| ResourceCheck{Resource\navailable?}
     
     ResourceCheck -->|Yes| RouteToProvider[Route to\nprovider adapter]
     ResourceCheck -->|No| QueueOrFallback[Queue or\nattempt fallback]
     
-    BlockRoute --> NotifyUser[Notify user:\nmodel unavailable\nin local-only mode]
+    BlockRoute --> NotifyUser["Notify user:\nmodel unavailable\nin local-only mode"]
 ```
 
 ### 10.2 Routing Precedence Order
@@ -609,7 +766,7 @@ flowchart TD
    - Required capabilities (tool calling, structured output, context window)
    - Agent type and task complexity heuristics
    - Local availability preference
-5. **System Default** — Falls back to `OLLAMA_DEFAULT_MODEL` from `config.py`.
+5. **System Default** — Falls back to `OLLAMA_DEFAULT_MODEL` from `config.py` (currently `qwen2.5-coder:14b`).
 
 ### 10.3 Agent Capability Requirements Matrix
 
@@ -662,6 +819,24 @@ def select_model(
     ))
     
     return candidates[0]
+
+
+def _has_capabilities(model: ModelDefinition, required: set[str]) -> bool:
+    """Check if model satisfies all required capabilities."""
+    capability_map = {
+        "tool_calling": model.supports_tool_calling,
+        "structured_output": model.supports_structured_output,
+        "vision": model.supports_vision,
+        "streaming": model.supports_streaming,
+    }
+    return all(capability_map.get(cap, False) for cap in required)
+
+
+def _passes_privacy_filter(model: ModelDefinition, privacy_mode: str) -> bool:
+    """Check if model passes privacy constraints."""
+    if privacy_mode == "local_only":
+        return model.provider_type == ProviderType.LOCAL
+    return True  # "prefer_local" and "allow_external" accept all
 ```
 
 ---
@@ -706,17 +881,28 @@ flowchart TD
     
     LocalFallback -->|Yes| CapCheck{Meets capability\nrequirements?}
     CapCheck -->|Yes| UseFallback[Use fallback\nlocal model]
-    CapCheck -->|No| Degrade[Use best available\nwith degraded capability]
+    CapCheck -->|No| Degrade["Use best available\nwith degraded capability"]
     
     LocalFallback -->|No| ExternalAllowed{External providers\nenabled for this project?}
-    ExternalAllowed -->|Yes| UseExternal[Route to external\nprovider with disclosure]
-    ExternalAllowed -->|No| FailSafe[Fail safe:\nPause task and notify user]
+    ExternalAllowed -->|Yes| UseExternal["Route to external\nprovider with disclosure"]
+    ExternalAllowed -->|No| FailSafe["Fail safe:\nPause task and notify user"]
     
-    UseFallback --> LogFallback[Log fallback event\nwith original and actual model]
+    UseFallback --> LogFallback["Log fallback event\nwith original and actual model"]
     UseExternal --> LogFallback
     Degrade --> LogFallback
-    FailSafe --> NotifyUser[Display actionable\nerror in UI and mobile]
+    FailSafe --> NotifyUser["Display actionable\nerror in UI and mobile"]
 ```
+
+### 11.4 When to Retry vs. Fail vs. Request User Input
+
+| Condition | Action |
+| :--- | :--- |
+| Transient provider error (connection timeout, 5xx) | Retry with backoff |
+| Rate limit (429) | Wait and retry |
+| Permanent provider error (auth failure, model not found) | Fail immediately; notify user |
+| Invalid structured output | Retry with prompt repair |
+| All local models unavailable + local-only mode | Fail safely; request user to install models or disable local-only |
+| All providers unavailable | Fail safely; display comprehensive diagnostics |
 
 ---
 
@@ -764,7 +950,7 @@ sequenceDiagram
     end
     
     Resource-->>Router: RESOURCE_AVAILABLE
-    Router->>Router: Prepare normalized request (redact secrets)
+    Router->>Router: Prepare normalized request (redact secrets for external)
     Router->>Adapter: invoke(InferenceRequest, ModelDefinition)
     
     Note over Adapter,Provider: Streaming inference
@@ -789,8 +975,9 @@ sequenceDiagram
 | Trigger | Cancellation Mechanism | Resource Cleanup |
 | :--- | :--- | :--- |
 | User clicks "Cancel Task" | `task.is_cancelled` flag propagated via `asyncio.Event` | HTTP client socket closed immediately; Ollama halts token generation |
-| Approval timeout (15 min) | `ApprovalTimeoutError` raised | In-flight inference cancelled if task was waiting for tool approval mid-stream |
+| Approval timeout (15 min) | `ApprovalTimeoutError` raised (existing `core/exceptions.py`) | In-flight inference cancelled if task was waiting for tool approval mid-stream |
 | System resource pressure | Resource scheduler preempts lowest-priority request | HTTP stream aborted; request re-queued when resources free |
+| Agent runtime cancellation | Agent context manager `__aexit__` triggers cleanup | Pending inference requests cancelled; partial results discarded |
 
 ### 12.3 Timeout Policy (Aligned with API Gateway INT-05 / INT-06)
 
@@ -799,6 +986,15 @@ sequenceDiagram
 | **Ollama (Local)** | 120s | 60s (model loading) | 5s |
 | **External API** | 60s | 30s | 10s |
 | **Tool-Call Inference** | 180s | 60s | 5s |
+
+### 12.4 Partial Response and Interrupted Stream Handling
+
+When a stream is interrupted (timeout, cancellation, network error):
+
+1. Tokens already received are preserved in a partial `InferenceResult` with `finish_reason = "interrupted"`.
+2. The partial result is returned to the agent with a flag indicating incomplete generation.
+3. The agent runtime decides whether to use the partial content, retry, or fail the task step.
+4. Partial responses are never presented to the user as complete results.
 
 ---
 
@@ -816,32 +1012,43 @@ flowchart TD
     SchemaValidate -->|Valid| Accept[Accept structured result]
     SchemaValidate -->|Invalid| RetryCount{Retry count\n< max_retries of 2?}
     
-    RetryCount -->|Yes| RepairPrompt[Append schema error\nto messages and retry]
-    RepairPrompt --> LLMRetry[Re-invoke LLM\nwith repair context]
+    RetryCount -->|Yes| RepairPrompt["Append schema error\nto messages and retry"]
+    RepairPrompt --> LLMRetry["Re-invoke LLM\nwith repair context"]
     LLMRetry --> ParseJSON
     
-    RetryCount -->|No| FallbackParse[Attempt lenient\nJSON extraction]
+    RetryCount -->|No| FallbackParse["Attempt lenient\nJSON extraction"]
     FallbackParse --> LenientValid{Extracted valid\nJSON?}
-    LenientValid -->|Yes| AcceptPartial[Accept with\ndegradation warning]
+    LenientValid -->|Yes| AcceptPartial["Accept with\ndegradation warning"]
     LenientValid -->|No| FailStructured[Raise StructuredOutputError]
 ```
 
-### 13.2 Tool-Call Authorization Pipeline
+### 13.2 Schema Validation
 
-Model-generated tool calls are **untrusted input**. They must pass through the existing 5-Tier Permission Gate (per Security Architecture §5 and Tool Runtime Architecture §14-15) before any execution.
+Structured output validation uses Pydantic v2 schema validation (consistent with the existing schema layer in `schemas/`):
+
+1. The agent specifies a JSON schema (derived from a Pydantic model) in the `InferenceRequest.response_format` field.
+2. The model's response is parsed and validated against this schema.
+3. Validation errors include field-level details (missing fields, type mismatches, constraint violations).
+4. Repair prompts include the specific validation error, not just a generic retry instruction.
+
+### 13.3 Tool-Call Authorization Pipeline
+
+Model-generated tool calls are **untrusted input**. They must pass through the existing 5-Tier Permission Gate (per Security Architecture §5 and Backend Architecture §50) before any execution.
 
 ```mermaid
 flowchart TD
-    LLMOutput[LLM Tool Call Output] --> ParseToolCall[Parse tool name\nand arguments from response]
+    LLMOutput[LLM Tool Call Output] --> ParseToolCall["Parse tool name\nand arguments from response"]
     ParseToolCall --> ValidateName{Tool name exists\nin Tool Registry?}
-    ValidateName -->|No| RejectUnknown[REJECT: Unknown tool\nLog audit event]
+    ValidateName -->|No| RejectUnknown["REJECT: Unknown tool\nLog audit event"]
     ValidateName -->|Yes| ValidateArgs{Arguments match\ntool input schema?}
     
     ValidateArgs -->|No| RetryLLM{Retry count < 2?}
-    RetryLLM -->|Yes| RepromptLLM[Re-invoke LLM with\nschema correction]
-    RetryLLM -->|No| RejectMalformed[REJECT: Malformed\ntool arguments]
+    RetryLLM -->|Yes| RepromptLLM["Re-invoke LLM with\nschema correction"]
+    RetryLLM -->|No| RejectMalformed["REJECT: Malformed\ntool arguments"]
     
-    ValidateArgs -->|Yes| PermissionCheck[5-Tier Permission Gate\nvia ToolExecutionService]
+    ValidateArgs -->|Yes| AgentPermCheck{Agent type\nallowed this tool?}
+    AgentPermCheck -->|No| RejectPerm["REJECT: Agent not\nauthorized for tool"]
+    AgentPermCheck -->|Yes| PermissionCheck["5-Tier Permission Gate\nvia ToolExecutionService"]
     PermissionCheck -->|Tier 1-2: Auto| Execute[Execute tool]
     PermissionCheck -->|Tier 3: Policy| PolicyEval{Policy allows\nauto-execution?}
     PolicyEval -->|Yes| Execute
@@ -849,18 +1056,27 @@ flowchart TD
     PermissionCheck -->|Tier 4-5: Approval| HumanApproval
     
     HumanApproval -->|Approved| Execute
-    HumanApproval -->|Rejected| NotifyAgent[Return rejection\nreason to agent]
+    HumanApproval -->|Rejected| NotifyAgent["Return rejection\nreason to agent"]
     
-    Execute --> RecordAudit[Record ToolExecution\nin audit trail]
+    Execute --> RecordAudit["Record ToolExecution\nin audit trail"]
 ```
 
-### 13.3 Tool-Call Contract Enforcement
+### 13.4 Tool-Call Contract Enforcement
 
 1. **Tool Registry Binding**: Tool calls must reference tools in the `ToolRegistry` (`tools/registry.py`). The LLM cannot invent new tool names.
 2. **Schema Validation**: Tool arguments are validated against the tool's `input_schema` (Pydantic v2) before execution.
 3. **Agent Permission Matrix**: Tool calls are filtered by the agent-to-tool permission matrix (Backend Architecture §50). A Planner agent cannot call `write_file`; a Security agent cannot call `git_commit`.
 4. **Sandbox Enforcement**: Tool calls requiring subprocess execution route through the Docker sandbox (per Security Architecture) or host boundary guard.
 5. **Retry Limits**: Malformed tool-call outputs trigger up to 2 re-invocations with schema correction context. After 2 failures, the tool call is rejected and the error is reported to the orchestrator.
+6. **Rejected Tool-Call Behavior**: When a tool call is rejected (unknown tool, schema violation, permission denied), the rejection reason is included in the next inference request so the agent can adjust its approach.
+
+### 13.5 Structured Response Versioning
+
+Agent output schemas are versioned alongside agent implementations. When a schema version changes:
+
+1. In-flight tasks continue using the schema version from task creation time.
+2. New tasks use the current schema version.
+3. Schema backward compatibility is maintained for at least one major version.
 
 ---
 
@@ -868,7 +1084,7 @@ flowchart TD
 
 ### 14.1 Context Budget Allocation
 
-Context budget management aligns with the Agent Memory, Knowledge & Retrieval Architecture and the existing Context Assembler (`orchestration/context.py`).
+Context budget management aligns with the Agent Memory, Knowledge & Retrieval Architecture and the existing Context Assembler concept (`orchestration/context.py`).
 
 ```
 +---------------------------------------------------------------------------------------------------+
@@ -893,27 +1109,38 @@ Context budget management aligns with the Agent Memory, Knowledge & Retrieval Ar
 flowchart TD
     Assemble[Assemble full context] --> Measure{Total tokens\n> model context window?}
     Measure -->|No| Proceed[Submit to provider]
-    Measure -->|Yes| TruncateHistory[Truncate conversation\nhistory - Tier 7]
+    Measure -->|Yes| TruncateHistory["Truncate conversation\nhistory - Tier 7"]
     TruncateHistory --> Remeasure1{Still exceeds\ncontext?}
     Remeasure1 -->|No| Proceed
-    Remeasure1 -->|Yes| DropRAG[Drop lowest-ranked\nRAG chunks - Tier 5]
+    Remeasure1 -->|Yes| DropRAG["Drop lowest-ranked\nRAG chunks - Tier 5"]
     DropRAG --> Remeasure2{Still exceeds?}
     Remeasure2 -->|No| Proceed
-    Remeasure2 -->|Yes| CompressPlan[Summarize plan\ncontext - Tier 4]
+    Remeasure2 -->|Yes| CompressPlan["Summarize plan\ncontext - Tier 4"]
     CompressPlan --> Remeasure3{Still exceeds?}
     Remeasure3 -->|No| Proceed
-    Remeasure3 -->|Yes| ReportOverflow[Emit context_overflow\nevent to user]
+    Remeasure3 -->|Yes| ReportOverflow["Emit context_overflow\nevent to user"]
     ReportOverflow --> SelectLarger{Larger context\nmodel available?}
-    SelectLarger -->|Yes| SwitchModel[Route to larger\nmodel via fallback]
-    SelectLarger -->|No| FailSafe[Fail step with\nContextOverflowError]
+    SelectLarger -->|Yes| SwitchModel["Route to larger\nmodel via fallback"]
+    SelectLarger -->|No| FailSafe["Fail step with\nContextOverflowError"]
 ```
 
 ### 14.3 Critical Context Invariants
 
 1. **System prompt safety instructions** and **agent persona** are **never truncated**. They form the security boundary preventing prompt injection.
-2. **User task constraints** (e.g., "do not modify files in `vendor/`") are **never silently discarded**.
+2. **User task constraints** (e.g., "do not modify files in `vendor/`") are **never silently discarded**. If truncation would remove a user constraint, the system reports a `ContextOverflowError` instead.
 3. **Output token reservation** is always subtracted from the available context budget before content assembly.
-4. The system reports to the user when task complexity exceeds available context, rather than silently dropping critical context.
+4. The system reports to the user when task complexity exceeds available context or model capability, including actionable guidance (e.g., "Consider using a model with a larger context window").
+5. **Security instructions and approval requirements** are never truncated — they are Priority 1/Fixed.
+
+### 14.4 Token Counting
+
+Token estimation uses the following strategy (per TBD-MR-05):
+
+1. **Model-specific tokenizer** when available (e.g., model's published tokenizer).
+2. **`tiktoken`** for OpenAI-compatible models.
+3. **Character-based estimation** (4 characters per token) as a last resort with a 10% safety buffer.
+
+The system always uses conservative estimates (rounding up) to avoid exceeding context limits.
 
 ---
 
@@ -928,18 +1155,18 @@ flowchart TD
     InfReq[Inference Request] --> AdmissionGate{Resource\nAdmission Gate}
     
     AdmissionGate --> CheckVRAM{Estimated VRAM\navailable?}
-    CheckVRAM -->|Insufficient| QueueReq[Queue request\n- bounded queue]
+    CheckVRAM -->|Insufficient| QueueReq["Queue request\n- bounded queue"]
     CheckVRAM -->|Sufficient| CheckConcurrency{Concurrent\ninference < max?}
     
     CheckConcurrency -->|At limit| QueueReq
     CheckConcurrency -->|Below limit| CheckRAM{System RAM\n> safety threshold?}
     
     CheckRAM -->|Below 2GB free| QueueReq
-    CheckRAM -->|Above threshold| Admit[Admit request\nfor execution]
+    CheckRAM -->|Above threshold| Admit["Admit request\nfor execution"]
     
     QueueReq --> QueueFull{Queue full?}
-    QueueFull -->|Yes| RejectBackpressure[Reject with\nbackpressure signal]
-    QueueFull -->|No| WaitInQueue[Wait for\nresource availability]
+    QueueFull -->|Yes| RejectBackpressure["Reject with\nbackpressure signal"]
+    QueueFull -->|No| WaitInQueue["Wait for\nresource availability"]
     WaitInQueue --> Admit
 ```
 
@@ -948,8 +1175,8 @@ flowchart TD
 | Subsystem | Resource Budget | Enforcement | Source |
 | :--- | :--- | :--- | :--- |
 | **Ollama Inference** | Up to 16GB VRAM / RAM | Ollama runtime GPU layer limits | Backend Architecture §42 |
-| **Concurrent Inference** | 1 active request (MVP) | In-process semaphore | This document |
-| **Inference Queue** | 10 pending requests max | Bounded asyncio queue | This document |
+| **Concurrent Inference** | 1 active request (MVP) | In-process `asyncio.Semaphore` | This document |
+| **Inference Queue** | 10 pending requests max | Bounded `asyncio.Queue` | This document |
 | **Model Loading Memory** | Ollama-managed | Ollama auto-unloads idle models after timeout | Ollama runtime |
 | **Docker Sandbox** | 2GB RAM / 2.0 CPUs | Docker cgroups | Backend Architecture §42 |
 | **Embedding Engine** | 1GB RAM | ONNX Runtime thread pool | Backend Architecture §42 |
@@ -963,6 +1190,14 @@ flowchart TD
 | Inference vs. Docker Test Execution | Allow concurrent (separate resource pools) | Equal |
 | Multiple inference requests | Serial execution with FIFO queue (MVP) | First-come-first-served |
 | Inference vs. UI Responsiveness | Inference runs on background thread; UI never blocked | UI > Inference |
+
+### 15.4 Thermal and Resource Pressure
+
+Where observable (via `psutil` CPU frequency and temperature APIs on supported hardware):
+
+1. If CPU temperature exceeds safe thresholds, the system logs a warning but does not throttle inference — Ollama and the OS manage thermal throttling.
+2. If available RAM drops below 1GB, the system pauses non-critical background tasks (indexing, log rotation) to free memory.
+3. The system does not assume specific hardware specifications. Resource checks use runtime-detected values.
 
 ---
 
@@ -994,6 +1229,8 @@ flowchart TD
 - [ ] API keys are never stored in SQLite, logs, `.env` files, or event payloads.
 - [ ] The system never silently switches from local to external inference.
 - [ ] Fallback chains respect the project's privacy configuration.
+- [ ] Data retention policies for external providers are documented and disclosed.
+- [ ] Logging of prompt content to external providers is restricted per Observability Architecture §4.
 
 ### 16.3 Sensitive Data Classification
 
@@ -1006,6 +1243,15 @@ flowchart TD
 | Git diffs | Sensitive (Proprietary) | Allowed | Allowed only if project opts in |
 | System prompt / agent instructions | Internal | Allowed | Allowed (no proprietary content) |
 
+### 16.4 Provider Disclosure
+
+The system makes it clear when a task uses a remote model:
+
+1. **UI Indicator**: A visible badge appears in the task panel showing the external provider and model.
+2. **Event Logging**: `inference.started` events include `provider_type: "remote"` and `provider_id`.
+3. **Mobile Companion**: Approval requests display which model is being used (local vs. external).
+4. **Task History**: Task step records include the provider and model used for each inference.
+
 ---
 
 ## 17. Model Configuration & User Control
@@ -1017,13 +1263,13 @@ flowchart TD
 |                           NEXUS MODEL CONFIGURATION HIERARCHY                                      |
 +---------------------------------------------------------------------------------------------------+
 | Priority | Source                          | Scope           | Storage                            |
-|----------|--------------------------------|-----------------|------------------------------------|
+|----------|--------------------------------|-----------------|------------------------------------+
 | 1 (High) | Task-level model_override      | Single task     | Task record in SQLite              |
 | 2        | Session model selection (UI)    | Current session | In-memory volatile                 |
 | 3        | Project-level model config     | Per project     | .nexus/config.json                 |
 | 4        | Agent-specific model config    | Per agent type  | ~/.nexus/config.toml               |
 | 5        | Global default model           | System-wide     | ~/.nexus/config.toml               |
-| 6 (Low)  | Hardcoded system default       | Fallback        | config.py DEFAULT_MODEL            |
+| 6 (Low)  | Hardcoded system default       | Fallback        | config.py OLLAMA_DEFAULT_MODEL     |
 +---------------------------------------------------------------------------------------------------+
 ```
 
@@ -1044,12 +1290,20 @@ flowchart TD
 ### 17.3 Configuration Validation Rules
 
 1. Model identifiers are validated against the active model registry at configuration time.
-2. Temperature values outside `[0.0, 2.0]` are rejected with a `ValidationError`.
+2. Temperature values outside `[0.0, 2.0]` are rejected with a `ValidationError` (existing `core/exceptions.py`).
 3. Context window overrides exceeding the model's actual limit emit a warning and are clamped to the model maximum.
-4. Unsupported provider-specific parameters (e.g., Anthropic `thinking` mode passed to Ollama) are silently ignored with a debug-level log entry.
+4. Unsupported provider-specific parameters (e.g., Anthropic `thinking` mode passed to Ollama) are silently ignored with a debug-level log entry. They do not cause errors and their effect is not misrepresented.
 5. Configuration changes take effect for new inference requests; in-flight requests use the configuration snapshot from request creation time.
 
-### 17.4 Desktop & Mobile Capabilities (Conceptual)
+### 17.4 Configuration Persistence and Reset
+
+1. Global settings persist in `~/.nexus/config.toml`.
+2. Project settings persist in `.nexus/config.json` within the project workspace.
+3. Task-level overrides persist in the task SQLite record for the task's lifetime.
+4. Users can reset any configuration level to its parent default via the settings UI.
+5. Configuration migration is handled when NEXUS updates introduce new settings — missing fields receive documented defaults.
+
+### 17.5 Desktop & Mobile Capabilities (Conceptual)
 
 **Desktop:**
 - Model selection dropdown with capability badges (tool calling, structured output, vision)
@@ -1057,11 +1311,14 @@ flowchart TD
 - Per-project privacy toggle for external providers
 - Real-time token usage and inference latency display
 - Model configuration panel for temperature, context, and fallback preferences
+- Active model indicator showing which model is currently loaded
 
 **Mobile Companion:**
 - Read-only view of active model and provider status
 - Push notification when model/provider becomes unavailable during task execution
 - Approval actions display which model is being used (local vs. external disclosure)
+
+No UI mockups or UI/UX design prompts are included in this document.
 
 ---
 
@@ -1119,7 +1376,11 @@ Circuit Breaker States:
                Success -> CLOSED. Failure -> OPEN (reset timer).
 ```
 
-### 18.4 Failure Impact Isolation
+### 18.4 Stale Health Status
+
+Health status is considered stale if more than 2x the check interval has elapsed since the last successful probe. Stale status triggers an immediate health re-probe before the next inference request. A stale provider is not used for routing until health is re-confirmed.
+
+### 18.5 Failure Impact Isolation
 
 A temporary provider failure must **never**:
 - Corrupt task state in SQLite
@@ -1127,6 +1388,7 @@ A temporary provider failure must **never**:
 - Silently switch providers in violation of privacy settings
 - Leave orphaned Docker containers or PTY sessions
 - Cause the desktop UI to freeze or become unresponsive
+- Leave in-memory state inconsistent with persisted state
 
 ---
 
@@ -1139,6 +1401,7 @@ Every inference execution records the following provenance metadata in the `Task
 | Field | Source | Purpose |
 | :--- | :--- | :--- |
 | `model_id` | Model registry | Exact model identifier used (e.g., `qwen2.5-coder:14b-instruct-q4_K_M`) |
+| `model_digest` | Ollama `/api/show` | Content hash for reproducibility |
 | `provider_id` | Provider adapter | Which provider served the request (e.g., `ollama`, `openai`) |
 | `provider_type` | Provider config | `local` or `remote` |
 | `context_window_used` | Context assembler | Tokens in assembled context |
@@ -1154,14 +1417,23 @@ Every inference execution records the following provenance metadata in the `Task
 | **Model removed from Ollama** | `GET /api/tags` no longer lists model | Registry refresh detects removal; emit `model.removed` event; select fallback |
 | **External provider model deprecated** | API returns model-not-found error | Adapter catches error; route to configured replacement model |
 | **Ollama version upgrade** | API behavior may change | Check `/api/version` at startup; log version; verify minimum compatibility |
+| **Embedding model version change** | Vector similarity scores may drift | Out of scope for this document; handled by Agent Memory Architecture |
 
 ### 19.3 Compatibility Checks
 
 Before a model is used for a task:
 1. Model must appear in the current model registry (verified within last refresh cycle).
-2. Model capabilities must meet the agent's minimum requirements.
+2. Model capabilities must meet the agent's minimum requirements (per §10.3).
 3. Model context window must accommodate the estimated context budget.
 4. Provider health state must be `AVAILABLE`, `BUSY` (will queue), or `LOADING_MODEL` (will wait).
+5. If model digest has changed since the last task step, a warning event is emitted.
+
+### 19.4 Prompt/Template Version Tracking
+
+When agents use versioned prompt templates:
+1. The template version is recorded alongside the model ID in the task step record.
+2. Template changes trigger evaluation benchmarks (per AI Evaluation Architecture) to verify no regression.
+3. Template versioning is the responsibility of the agent implementation, not the model runtime layer.
 
 ---
 
@@ -1169,7 +1441,7 @@ Before a model is used for a task:
 
 ### 20.1 Structured Inference Events
 
-All events use the existing `NexusEventEnvelope` schema (Observability Architecture §4):
+All events use the existing `EventEnvelope` schema in `core/events.py`. The following event types are proposed additions to the `EventType` enum:
 
 | Event Type | Trigger | Key Metadata |
 | :--- | :--- | :--- |
@@ -1190,7 +1462,7 @@ All events use the existing `NexusEventEnvelope` schema (Observability Architect
 
 | Metric | Tracked Per | Storage | Retention |
 | :--- | :--- | :--- | :--- |
-| Total tokens (prompt + completion) | Task step | `task_steps.tokens_used` | Task lifetime |
+| Total tokens (prompt + completion) | Task step | `task_steps.tokens_used` column | Task lifetime |
 | Inference latency (ms) | Request | Event log | 30-day rolling |
 | Provider error rate | Provider | In-memory gauge | Real-time |
 | Model usage distribution | Day | Event log aggregation | 90-day rolling |
@@ -1200,8 +1472,9 @@ All events use the existing `NexusEventEnvelope` schema (Observability Architect
 ### 20.3 Logging Constraints
 
 - **Never log**: Full prompt content containing proprietary source code, API keys, or credentials.
-- **Always redact**: Secrets detected by the pre-persistence redaction engine before any log write.
+- **Always redact**: Secrets detected by the pre-persistence redaction engine (Observability Architecture §4) before any log write.
 - **Safe to log**: Model identifiers, token counts, latency, error codes, provider identifiers, and non-sensitive metadata.
+- **External provider requests**: Log the provider ID, model ID, token counts, and latency. Do not log the request body or response content.
 
 ---
 
@@ -1231,7 +1504,7 @@ All events use the existing `NexusEventEnvelope` schema (Observability Architect
 
 ### 21.2 Model Evaluation Methods
 
-Model evaluation for NEXUS-specific tasks is governed by the AI Evaluation Architecture. This document defines the inference infrastructure; evaluation criteria include:
+Model evaluation for NEXUS-specific tasks is governed by the AI Evaluation Architecture (`docs/NEXUS_AI_EVALUATION_ARCHITECTURE.md`). This document defines the inference infrastructure; evaluation criteria include:
 
 | Evaluation Dimension | Measured By | Acceptance Threshold |
 | :--- | :--- | :--- |
@@ -1240,6 +1513,8 @@ Model evaluation for NEXUS-specific tasks is governed by the AI Evaluation Archi
 | **Tool-Call Precision** | Schema validity rate, unnecessary tool call frequency | >= 95% valid schema, < 5% unnecessary calls |
 | **Structured Output Reliability** | JSON schema compliance rate | >= 90% first-attempt compliance |
 | **Context Utilization** | Relevant context retrieval precision | Per Agent Memory Architecture metrics |
+
+Model evaluation evidence is required before any model is marked as "recommended" for a specific agent type. No model is claimed to be reliable or superior without measured evaluation results.
 
 ---
 
@@ -1354,15 +1629,15 @@ flowchart TD
     LocalAvail -->|Yes| UseLocal[Use Local Provider]
     LocalAvail -->|No| LocalOnly{local_only_mode\nenabled?}
     
-    LocalOnly -->|Yes| FailSafe[FAIL SAFE\nNotify user]
+    LocalOnly -->|Yes| FailSafe["FAIL SAFE\nNotify user"]
     LocalOnly -->|No| ExtEnabled{External providers\nenabled for project?}
     
     ExtEnabled -->|No| FailSafe
     ExtEnabled -->|Yes| ExtAvail{External provider\nhealthy?}
     
     ExtAvail -->|No| FailSafe
-    ExtAvail -->|Yes| Redact[Redact secrets\nfrom prompt]
-    Redact --> Disclose[Display remote\nprovider indicator]
+    ExtAvail -->|Yes| Redact["Redact secrets\nfrom prompt"]
+    Redact --> Disclose["Display remote\nprovider indicator"]
     Disclose --> UseExternal[Use External Provider]
 ```
 
@@ -1372,14 +1647,14 @@ flowchart TD
 flowchart TD
     LLM[LLM Output] --> Parse[Parse tool call]
     Parse --> NameCheck{Tool name in\nRegistry?}
-    NameCheck -->|No| Reject1[REJECT: Unknown tool]
+    NameCheck -->|No| Reject1["REJECT: Unknown tool"]
     NameCheck -->|Yes| SchemaCheck{Arguments valid\nper schema?}
     SchemaCheck -->|No| Retry{Retries < 2?}
     Retry -->|Yes| Reprompt[Re-invoke LLM]
-    Retry -->|No| Reject2[REJECT: Malformed]
+    Retry -->|No| Reject2["REJECT: Malformed"]
     SchemaCheck -->|Yes| AgentPerm{Agent allowed\nthis tool?}
-    AgentPerm -->|No| Reject3[REJECT: Agent\nnot authorized]
-    AgentPerm -->|Yes| TierGate[5-Tier\nPermission Gate]
+    AgentPerm -->|No| Reject3["REJECT: Agent\nnot authorized"]
+    AgentPerm -->|Yes| TierGate["5-Tier\nPermission Gate"]
     TierGate -->|Auto| Exec[Execute]
     TierGate -->|Approval| Human[Human approval]
     Human -->|Approved| Exec
@@ -1395,23 +1670,23 @@ flowchart TD
     Success -->|No| Retryable{Retryable\nerror?}
     
     Retryable -->|Yes| RetryCount{Retries\n< max?}
-    RetryCount -->|Yes| Backoff[Exponential\nbackoff + jitter]
+    RetryCount -->|Yes| Backoff["Exponential\nbackoff + jitter"]
     Backoff --> Invoke
     RetryCount -->|No| FallbackLocal{Other local\nmodels?}
     
     Retryable -->|No| FallbackLocal
     
     FallbackLocal -->|Yes| CapMatch{Meets\ncapabilities?}
-    CapMatch -->|Yes| InvokeFallback[Invoke fallback\nlocal model]
+    CapMatch -->|Yes| InvokeFallback["Invoke fallback\nlocal model"]
     CapMatch -->|No| ExtAllowed{External\nallowed?}
     FallbackLocal -->|No| ExtAllowed
     
-    ExtAllowed -->|Yes| InvokeExt[Invoke external\nwith disclosure]
-    ExtAllowed -->|No| FailTask[Fail task step\nwith clear error]
+    ExtAllowed -->|Yes| InvokeExt["Invoke external\nwith disclosure"]
+    ExtAllowed -->|No| FailTask["Fail task step\nwith clear error"]
     
-    InvokeFallback --> LogFallback[Log fallback\nevent]
+    InvokeFallback --> LogFallback["Log fallback\nevent"]
     InvokeExt --> LogFallback
-    FailTask --> NotifyUser[Notify user\nwith guidance]
+    FailTask --> NotifyUser["Notify user\nwith guidance"]
 ```
 
 ### 22.7 Resource-Aware Inference Scheduling
@@ -1424,20 +1699,20 @@ flowchart TD
     VRAM -->|No| Queue
     VRAM -->|Yes| Concurrency{Below\nconcurrency\nlimit?}
     
-    Concurrency -->|No| Queue[Enqueue\nrequest]
+    Concurrency -->|No| Queue["Enqueue\nrequest"]
     Concurrency -->|Yes| RAM{RAM >\nsafety\nthreshold?}
     
     RAM -->|No| Queue
-    RAM -->|Yes| Admit[Admit and\nexecute]
+    RAM -->|Yes| Admit["Admit and\nexecute"]
     
     Queue --> Full{Queue\nfull?}
-    Full -->|Yes| Reject[Reject with\nbackpressure]
-    Full -->|No| Wait[Wait for\nresource signal]
+    Full -->|Yes| Reject["Reject with\nbackpressure"]
+    Full -->|No| Wait["Wait for\nresource signal"]
     Wait --> Admit
     
-    Admit --> Execute[Execute\ninference]
-    Execute --> Release[Release\nresource slot]
-    Release --> Signal[Signal\nnext queued]
+    Admit --> Execute["Execute\ninference"]
+    Execute --> Release["Release\nresource slot"]
+    Release --> Signal["Signal\nnext queued"]
 ```
 
 ---
@@ -1454,9 +1729,12 @@ The following capabilities extend the existing API contract (API Gateway Archite
 | **Model Availability** | Partially in health endpoint | Add per-model availability status to model list response |
 | **Provider Health** | `GET /api/v1/health` (Ollama only) | Extend to report all provider health states |
 | **Model Selection** | `PUT /api/v1/models` | Extend to support per-project and per-agent model preferences |
-| **Inference Status** | Via WebSocket events | Already supported via event bus; add inference-specific event types |
+| **Inference Status** | Via WebSocket/SSE events | Already supported via event bus; add inference-specific event types |
 | **Usage Summary** | Not yet implemented | **New**: `GET /api/v1/models/usage` for token/cost aggregation |
 | **Provider Configuration** | Not yet implemented | **New**: `GET/PUT /api/v1/settings/providers` for provider management |
+| **Provider Error Reporting** | Not yet implemented | **New**: Error details included in `provider.health_changed` events |
+
+Final endpoint paths and payload schemas are not defined here if they belong to the API Specification. Only gaps requiring updates are documented.
 
 ### 23.2 Conceptual Data Entities
 
@@ -1472,7 +1750,11 @@ These entities extend the existing database schema. They are candidates for SQLA
 | `InferenceUsage` | `inference_usage` SQLite table (V1) | Historical token usage and cost tracking |
 | `ProviderHealthRecord` | In-memory state machine; recent history in SQLite event log | Provider availability timeline |
 
+These are candidates only. Existing database entities and configuration storage patterns are reused wherever possible.
+
 ### 23.3 Extended Model API Response Schema
+
+Extensions to the existing `schemas/model.py` (which currently defines `ModelItemResponse`, `ModelListResponse`, `ModelStatusResponse`):
 
 ```python
 class ModelCapabilityResponse(BaseModel):
@@ -1522,16 +1804,16 @@ class ProviderStatusResponse(BaseModel):
 
 **Scope**: Establish reliable local Ollama integration with health monitoring, model discovery, and basic inference.
 
-**Dependencies**: Existing `OllamaAdapter`, `ModelProvider` ABC, `config.py`, `core/exceptions.py`.
+**Dependencies**: Existing `OllamaAdapter` (`ai/ollama_adapter.py`), `ModelProvider` ABC (`ai/provider.py`), `Settings` (`config.py`), exceptions (`core/exceptions.py`), events (`core/events.py`).
 
 **Deliverables**:
 1. Extended `OllamaAdapter` with `get_model_capabilities()` and `get_health_state()` methods.
 2. `ModelRegistry` in-memory cache with Ollama model discovery and periodic refresh.
-3. Provider health state machine with AVAILABLE / UNAVAILABLE / LOADING_MODEL states.
-4. Extended `config.py` with model runtime settings (`OLLAMA_HEALTH_CHECK_INTERVAL`, `OLLAMA_DEFAULT_NUM_CTX`).
-5. Extended exception hierarchy: `ModelUnavailableError`, `ContextOverflowError`.
-6. Extended health endpoint to report detailed Ollama model availability.
-7. Structured `inference.*` and `provider.*` event emission through existing event bus.
+3. Provider health state machine with `AVAILABLE` / `UNAVAILABLE` / `LOADING_MODEL` states.
+4. Extended `config.py` with model runtime settings (`OLLAMA_HEALTH_CHECK_INTERVAL_SECONDS`, `OLLAMA_DEFAULT_NUM_CTX`).
+5. Extended exception hierarchy in `core/exceptions.py`: `ModelUnavailableError`, `ContextOverflowError`.
+6. Extended `EventType` enum in `core/events.py` with `inference.*` and `provider.*` event types.
+7. Extended health endpoint to report detailed Ollama model availability.
 
 **Risks**:
 - Ollama API may not reliably report context window for all model types.
@@ -1555,16 +1837,16 @@ class ProviderStatusResponse(BaseModel):
 
 **Scope**: Normalize provider interface for multi-provider support. Add structured output, tool calling, and external provider opt-in.
 
-**Dependencies**: Phase 1 completion, existing tool registry, 5-Tier Permission Gate.
+**Dependencies**: Phase 1 completion, existing tool registry, 5-Tier Permission Gate (Security Architecture §5).
 
 **Deliverables**:
 1. `OpenAICompatibleAdapter` supporting external OpenAI-format APIs.
 2. `chat_with_tools()` and `chat_structured()` methods on `ModelProvider`.
 3. `InferenceRequest` / `InferenceResult` normalized data types.
 4. Structured output JSON schema validation with retry-and-repair pipeline.
-5. Tool-call parsing and authorization pipeline (routed through `ToolExecutionService`).
+5. Tool-call parsing and authorization pipeline (routed through existing `ToolExecutionService`).
 6. External provider configuration schema (`ExternalProviderConfig`).
-7. OS Keyring integration for API key storage (reusing existing `keyring` infrastructure).
+7. OS Keyring integration for API key storage (reusing existing `keyring` infrastructure per Security Architecture §30).
 8. Pre-transmission secret redaction for external provider calls.
 9. New exceptions: `ProviderRateLimitError`, `StructuredOutputError`.
 
@@ -1705,6 +1987,8 @@ class ProviderStatusResponse(BaseModel):
 | `R-MR-06` | Silent privacy violation (local to external) | Low | Critical | Privacy gate enforced at routing layer; integration test coverage; audit events | Privacy enforcement test suite |
 | `R-MR-07` | Model availability assumption | Medium | Medium | Runtime verification at task launch; never assume model is available from config alone | Model availability tests |
 | `R-MR-08` | Fallback chain complexity | Medium | Medium | Limited fallback depth (max 2 fallback attempts); clear logging of every fallback decision | Fallback chain integration tests |
+| `R-MR-09` | Token estimation inaccuracy | Medium | Low | Conservative estimation with 10% safety buffer; model-specific tokenizer when available | Context budget unit tests |
+| `R-MR-10` | Provider adapter inconsistency | Medium | Medium | Shared contract test suite executed against all adapters; mock-based CI tests | Provider contract test matrix |
 
 ---
 
@@ -1734,7 +2018,7 @@ class ProviderStatusResponse(BaseModel):
 | Model registry | New `ModelRegistry` class; no existing registry exists in codebase |
 | Configuration | Extends existing `Settings` in `config.py` — no separate config system |
 | Exception hierarchy | Extends existing `ModelProviderError` tree in `core/exceptions.py` |
-| Event system | Uses existing `NexusEventEnvelope` — no parallel event system |
+| Event system | Uses existing `EventEnvelope` in `core/events.py` — no parallel event system |
 | API contracts | Extends existing `schemas/model.py` — no parallel schema module |
 | Credential storage | Uses existing OS Keyring via `keyring` library — no new secret store |
 
@@ -1744,8 +2028,9 @@ All terminology in this document is consistent with established NEXUS architectu
 - **Agent types**: Planner, Developer, Tester, Debugger, Security, Reviewer (per PRD §12)
 - **Risk levels**: read_only, low, medium, high, critical (per Security Architecture §5)
 - **Task states**: Per Task Lifecycle Architecture §4 state machine
-- **Event envelope**: `NexusEventEnvelope` (per Observability Architecture §4)
+- **Event envelope**: `EventEnvelope` (per `core/events.py` and Observability Architecture §4)
 - **Permission tiers**: 5-Tier model (per Security Architecture §5 and API Gateway §9)
+- **Configuration hierarchy**: Per Backend Architecture and Tech Stack §41
 
 ---
 
@@ -1755,8 +2040,8 @@ The recommended next document in the NEXUS master architecture series is:
 
 **`docs/NEXUS_AGENT_ORCHESTRATION_AND_DAG_ARCHITECTURE.md`**
 
-**Rationale**: With the model runtime and provider infrastructure now fully specified, the next critical gap is the detailed specification of how the Custom Async DAG Orchestrator sequences agent execution, manages inter-agent context handoffs, handles dynamic replanning based on test failures, enforces bounded self-healing loops, and coordinates with the model router for agent-specific inference requests. The Backend Architecture provides a high-level overview of the DAG state machine, but the detailed orchestration protocols — including step dependency resolution, parallel subtask execution (V1), checkpoint/rollback semantics, and agent memory palace retrieval — require a dedicated architecture document to bridge the gap between the model infrastructure (this document) and the agent implementations.
+**Rationale**: With the model runtime and provider infrastructure now fully specified, the next critical gap is the detailed specification of how the Custom Async DAG Orchestrator sequences agent execution, manages inter-agent context handoffs, handles dynamic replanning based on test failures, enforces bounded self-healing loops, and coordinates with the model router for agent-specific inference requests. The Task Lifecycle Architecture provides the high-level state machine and the Backend Architecture outlines the DAG concept, but the detailed orchestration protocols — including step dependency resolution, parallel subtask execution (V1), checkpoint/rollback semantics, agent memory palace retrieval during plan generation, and the precise interface between the DAG scheduler and the `ModelRouter` defined in this document — require a dedicated architecture document to bridge the gap between the model infrastructure and the agent implementations.
 
 ---
 
-*End of AI Model Runtime & Provider Management Architecture Document.*
+*End of AI Model Runtime & Provider Management Architecture Document — v2.0.0*
