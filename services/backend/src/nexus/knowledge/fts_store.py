@@ -24,9 +24,10 @@ CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts USING fts5(
     file_path,
     symbol_name,
     content,
-    tokenize='unicode61 tokenchars "_."'
+    tokenize='unicode61'
 );
 """
+
 
 
 async def create_fts_table(session: AsyncSession) -> None:
@@ -39,6 +40,8 @@ async def create_fts_table(session: AsyncSession) -> None:
 async def index_chunks_fts(
     session: AsyncSession,
     chunks: list[dict[str, Any]],
+    project_id: str | None = None,
+    file_path: str | None = None,
 ) -> int:
     """Insert or replace chunks into the FTS5 index.
 
@@ -46,6 +49,8 @@ async def index_chunks_fts(
         session: SQLAlchemy async session.
         chunks: List of dicts with keys: chunk_id, project_id, file_path,
                 symbol_name, content.
+        project_id: Optional fallback project_id for all chunks in batch.
+        file_path: Optional fallback file_path for all chunks in batch.
 
     Returns:
         Number of chunks indexed.
@@ -54,6 +59,8 @@ async def index_chunks_fts(
         return 0
 
     for chunk in chunks:
+        c_proj_id = chunk.get("project_id") or project_id
+        c_file_path = chunk.get("file_path") or file_path
         await session.execute(
             text("""
                 INSERT OR REPLACE INTO chunk_fts(chunk_id, project_id, file_path, symbol_name, content)
@@ -61,8 +68,8 @@ async def index_chunks_fts(
             """),
             {
                 "chunk_id": chunk["chunk_id"],
-                "project_id": chunk["project_id"],
-                "file_path": chunk["file_path"],
+                "project_id": c_proj_id,
+                "file_path": c_file_path,
                 "symbol_name": chunk.get("symbol_name", ""),
                 "content": chunk["content"],
             },
@@ -70,6 +77,7 @@ async def index_chunks_fts(
 
     await session.commit()
     return len(chunks)
+
 
 
 async def delete_document_fts(

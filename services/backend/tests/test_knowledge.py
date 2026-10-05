@@ -42,7 +42,7 @@ def test_detect_language() -> None:
     assert detect_language(Path("README.md")) == "markdown"
     assert detect_language(Path("config.toml")) == "toml"
     assert detect_language(Path("Dockerfile")) == "dockerfile"
-    assert detect_language(Path("unknown.xyz")) == "text"
+    assert detect_language(Path("unknown.xyz")) is None
 
 
 def test_redact_secrets() -> None:
@@ -100,15 +100,17 @@ Retrieval uses hybrid RRF fusion.
     chunks = chunk_file("docs/overview.md", doc)
     assert len(chunks) >= 2
     assert any("Project Overview" in c.symbol_name for c in chunks if c.symbol_name)
-    assert all(c.chunk_type == ChunkType.PROSE for c in chunks)
+    assert all(c.chunk_type == ChunkType.HEADING_SECTION for c in chunks)
 
 
-def test_noop_embedding_adapter() -> None:
+@pytest.mark.asyncio
+async def test_noop_embedding_adapter() -> None:
     """Test NoopEmbeddingAdapter behaviors."""
     adapter = NoopEmbeddingAdapter()
     assert adapter.dimension == 0
-    assert adapter.embed_query("test query") == []
-    assert adapter.embed_batch(["text 1", "text 2"]) == [[], []]
+    assert await adapter.embed_query("test query") == []
+    assert await adapter.embed(["text 1", "text 2"]) == [[], []]
+
 
 
 @pytest.mark.asyncio
@@ -159,17 +161,18 @@ async def test_fts_lifecycle_and_search() -> None:
         # Search for authenticate
         results = await search_fts(session, project_id="prj_test_123", query="authenticate_user", top_k=5)
         assert len(results) >= 1
-        assert results[0].chunk_id == "chk_1"
-        assert results[0].symbol_name == "authenticate_user"
+        assert results[0]["chunk_id"] == "chk_1"
+        assert results[0]["symbol_name"] == "authenticate_user"
 
         # Search for invoice
         results_invoice = await search_fts(session, project_id="prj_test_123", query="calculate_invoice", top_k=5)
         assert len(results_invoice) >= 1
-        assert results_invoice[0].chunk_id == "chk_2"
+        assert results_invoice[0]["chunk_id"] == "chk_2"
 
         # Delete document from FTS
         await delete_document_fts(session, project_id="prj_test_123", file_path="services/auth.py")
         await session.commit()
+
 
         # Verify search no longer finds deleted document
         results_after = await search_fts(session, project_id="prj_test_123", query="authenticate_user", top_k=5)

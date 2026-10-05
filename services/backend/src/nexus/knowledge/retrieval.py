@@ -87,15 +87,10 @@ class HybridRetriever:
             vector_hits=len(vector_hits),
         )
 
-        # If only one source has results, use it directly
         if not lexical_hits and not vector_hits:
             return []
-        if not vector_hits:
-            return lexical_hits[:top_k]
-        if not lexical_hits:
-            return vector_hits[:top_k]
 
-        # Merge with RRF
+        # Merge with RRF (computes reciprocal rank scores and provenance)
         fused = self._reciprocal_rank_fusion(
             lexical_hits, vector_hits, lexical_weight, vector_weight
         )

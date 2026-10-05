@@ -35,6 +35,7 @@ class ChunkType(str, Enum):
     CONSTANT = "CONSTANT"
     CONFIG_BLOCK = "CONFIG_BLOCK"
     HEADING_SECTION = "HEADING_SECTION"
+    PROSE = "PROSE"
     RAW_TEXT = "RAW_TEXT"
 
 
@@ -54,6 +55,23 @@ EXTENSION_TO_LANGUAGE: dict[str, str] = {
     ".yaml": "yaml",
     ".yml": "yaml",
     ".toml": "toml",
+    ".html": "html",
+    ".css": "css",
+    ".scss": "scss",
+    ".sql": "sql",
+    ".sh": "bash",
+    ".bash": "bash",
+    ".ps1": "powershell",
+    ".dockerfile": "dockerfile",
+    ".txt": "text",
+}
+
+# Special filename mappings
+FILENAME_TO_LANGUAGE: dict[str, str] = {
+    "dockerfile": "dockerfile",
+    "makefile": "makefile",
+    "gemfile": "ruby",
+    "procfile": "text",
 }
 
 
@@ -80,9 +98,15 @@ class CodeChunk:
 
 
 def detect_language(file_path: str | Path) -> str | None:
-    """Detect programming language from file extension."""
-    ext = Path(file_path).suffix.lower()
+    """Detect programming language from file extension or exact filename."""
+    path = Path(file_path)
+    name_lower = path.name.lower()
+    if name_lower in FILENAME_TO_LANGUAGE:
+        return FILENAME_TO_LANGUAGE[name_lower]
+
+    ext = path.suffix.lower()
     return EXTENSION_TO_LANGUAGE.get(ext)
+
 
 
 def chunk_file(file_path: str | Path, content: str | None = None) -> list[CodeChunk]:

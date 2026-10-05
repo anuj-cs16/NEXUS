@@ -23,6 +23,12 @@ class EmbeddingAdapter(ABC):
     model_name: str = ""
     dimensions: int = 768
 
+    @property
+    def dimension(self) -> int:
+        """Alias for dimensions."""
+        return self.dimensions
+
+
     @abstractmethod
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """Generate dense vector embeddings for a batch of texts.

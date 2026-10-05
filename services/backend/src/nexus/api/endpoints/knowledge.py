@@ -12,7 +12,7 @@ from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
 from nexus.api.dependencies import DbSession
-from nexus.knowledge.embeddings import get_embedding_adapter
+from nexus.knowledge.embeddings import EmbeddingAdapter, NoopEmbeddingAdapter, get_embedding_adapter
 from nexus.knowledge.indexer import RepositoryIndexer
 from nexus.knowledge.retrieval import HybridRetriever
 from nexus.knowledge.vector_store import VectorStore
@@ -28,11 +28,25 @@ from nexus.services.project_service import ProjectService
 
 router = APIRouter()
 
-# Shared vector store & indexer instances
-_embedding_adapter = get_embedding_adapter()
-_vector_store = VectorStore(embedding_adapter=_embedding_adapter)
-_indexer = RepositoryIndexer(vector_store=_vector_store)
-_retriever = HybridRetriever(vector_store=_vector_store)
+_adapter: EmbeddingAdapter | None = None
+_vector_store: VectorStore | None = None
+_indexer: RepositoryIndexer | None = None
+_retriever: HybridRetriever | None = None
+
+
+async def _get_components() -> tuple[EmbeddingAdapter, VectorStore, RepositoryIndexer, HybridRetriever]:
+    """Lazy initialize knowledge components."""
+    global _adapter, _vector_store, _indexer, _retriever
+    if _adapter is None:
+        try:
+            _adapter = await get_embedding_adapter()
+        except Exception:
+            _adapter = NoopEmbeddingAdapter()
+        _vector_store = VectorStore(embedding_adapter=_adapter)
+        _indexer = RepositoryIndexer(vector_store=_vector_store)
+        _retriever = HybridRetriever(vector_store=_vector_store)
+    return _adapter, _vector_store, _indexer, _retriever
+
 
 
 @router.post("/index", response_model=KnowledgeIndexResponse)
@@ -44,9 +58,10 @@ async def index_project_repository(
     """Trigger incremental repository indexing for a project workspace."""
     project_service = ProjectService(session)
     project = await project_service.get_project(project_id)
+    _, _, indexer, _ = await _get_components()
 
     start_time = time.perf_counter()
-    stats = await _indexer.index_project(
+    stats = await indexer.index_project(
         session=session,
         project_id=project_id,
         root_path=project.path,
@@ -75,8 +90,9 @@ async def search_project_knowledge(
     """Execute hybrid (BM25 + ChromaDB) search with Reciprocal Rank Fusion."""
     project_service = ProjectService(session)
     await project_service.get_project(project_id)
+    _, _, _, retriever = await _get_components()
 
-    results = await _retriever.search(
+    results = await retriever.search(
         session=session,
         project_id=project_id,
         query=q,
@@ -114,6 +130,7 @@ async def get_knowledge_stats(
     """Get indexing status, file/chunk count, and retrieval engine status."""
     project_service = ProjectService(session)
     await project_service.get_project(project_id)
+    adapter, vector_store, _, _ = await _get_components()
 
     file_count_res = await session.execute(
         select(func.count(IndexedDocument.id)).where(
@@ -134,6 +151,7 @@ async def get_knowledge_stats(
         total_files=total_files,
         total_chunks=total_chunks,
         fts_enabled=True,
-        vector_enabled=not _vector_store.is_noop,
-        embedding_provider=_embedding_adapter.model_name,
+        vector_enabled=not vector_store.is_noop,
+        embedding_provider=adapter.model_name,
     )
+
