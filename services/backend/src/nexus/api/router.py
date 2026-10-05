@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from nexus.api.endpoints.approvals import router as approvals_router
 from nexus.api.endpoints.health import router as health_router
+from nexus.api.endpoints.knowledge import router as knowledge_router
 from nexus.api.endpoints.models import router as models_router
 from nexus.api.endpoints.projects import router as projects_router
 from nexus.api.endpoints.stream import router as stream_router
@@ -19,5 +20,11 @@ api_router.include_router(
     prefix="/projects/{project_id}/tasks",
     tags=["Tasks"],
 )
+api_router.include_router(
+    knowledge_router,
+    prefix="/projects/{project_id}/knowledge",
+    tags=["Knowledge"],
+)
 api_router.include_router(approvals_router, prefix="/approvals", tags=["Approvals"])
 api_router.include_router(stream_router, prefix="/stream", tags=["Streaming"])
+
